@@ -62,8 +62,8 @@ pub fn new_cipher(key []byte, nonce []byte) ?Cipher {
 		// derived key, allowing it to operate on a nonce of 24 bytes. See
 		// draft-irtf-cfrg-xchacha-01, Section 2.3.
 		keys = hchacha20(keys, nonces[0..16])
-		cnonce := []byte{len: chacha20.nonce_size}
-		copy(cnonce[4..12], nonces[16..24])
+		mut cnonce := []byte{len: chacha20.nonce_size}
+		subtle.constant_time_copy(1, mut cnonce[4..12], nonces[16..24])
 		nonces = cnonce.clone()
 	} else if nonces.len != chacha20.nonce_size {
 		return error('chacha20: wrong nonce size')
