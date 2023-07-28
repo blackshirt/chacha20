@@ -1,5 +1,5 @@
 Module {
-        name: 'chacha20'
+        name: 'chacha'
         author: 'blackshirt'
         version: ''
         tags: ['']
