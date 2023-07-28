@@ -3,7 +3,7 @@
 // that can be found in the LICENSE file.
 //
 // Chacha20 symetric key stream cipher encryption based on RFC 8439
-module chacha
+module chacha20
 
 import math
 import math.bits
@@ -47,25 +47,25 @@ mut:
 //
 // Note: see `encrypt` or `README` notes.
 pub fn new_cipher(key []u8, nonce []u8) !Cipher {
-	if key.len != chacha.key_size {
+	if key.len != chacha20.key_size {
 		return error('error wrong key size provided ')
 	}
 
-	if nonce.len !in [chacha.nonce_size, chacha.x_nonce_size] {
+	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
 		return error('error nonce size provided')
 	}
 	mut nonces := nonce.clone()
 	mut keys := key.clone()
 
-	if nonces.len == chacha.x_nonce_size {
+	if nonces.len == chacha20.x_nonce_size {
 		// XChaCha20 uses the ChaCha20 core to mix 16 bytes of the nonce into a
 		// derived key, allowing it to operate on a nonce of 24 bytes. See
 		// draft-irtf-cfrg-xchacha-01, Section 2.3.
 		keys = hchacha20(keys, nonces[0..16])
-		mut cnonce := []u8{len: chacha.nonce_size}
+		mut cnonce := []u8{len: chacha20.nonce_size}
 		copy(mut cnonce[4..12], nonces[16..24])
 		nonces = cnonce.clone()
-	} else if nonces.len != chacha.nonce_size {
+	} else if nonces.len != chacha20.nonce_size {
 		return error('chacha20: wrong nonce size')
 	}
 
@@ -100,12 +100,12 @@ pub fn (mut c Cipher) set_counter(ctr u32) {
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
 fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
-	_ = key[..chacha.key_size]
-	if nonce.len == chacha.x_nonce_size {
+	_ = key[..chacha20.key_size]
+	if nonce.len == chacha20.x_nonce_size {
 		ciphertext := encrypt_extended(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
-	if nonce.len == chacha.nonce_size {
+	if nonce.len == chacha20.nonce_size {
 		ciphertext := encrypt_generic(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
@@ -116,20 +116,20 @@ fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 // nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.
 // This function is intended to generate key for poly1305 mac.
 pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
-	_ = key[chacha.key_size - 1]
-	if nonce.len !in [chacha.nonce_size, chacha.x_nonce_size] {
+	_ = key[chacha20.key_size - 1]
+	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
 		return error('Bad nonce size')
 	}
 	// ensure nonce size is valid
 	counter := u32(0)
-	if nonce.len == chacha.x_nonce_size {
+	if nonce.len == chacha20.x_nonce_size {
 		mut cnonce := nonce[16..].clone()
 		subkey := hchacha20(key, nonce[0..16])
 		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
 		block := block_generic(subkey, counter, cnonce)!
 		return block[0..32]
 	}
-	if nonce.len == chacha.nonce_size {
+	if nonce.len == chacha20.nonce_size {
 		block := block_generic(key, counter, nonce)!
 		return block[0..32]
 	}
@@ -165,18 +165,18 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 
 // initialize_state initializes ChaCha20 state, represented as array of [16]u32
 fn initialize_state(key []u8, counter u32, nonce []u8) ![]u32 {
-	if key.len != chacha.key_size {
+	if key.len != chacha20.key_size {
 		return error('ChaCha20: wrong key size provided=${key.len}')
 	}
-	if nonce.len != chacha.nonce_size {
+	if nonce.len != chacha20.nonce_size {
 		return error('ChaCha20: wrong nonce size provided=${nonce.len}')
 	}
 	mut state := []u32{len: 16}
 
-	state[0] = chacha.cc0
-	state[1] = chacha.cc1
-	state[2] = chacha.cc2
-	state[3] = chacha.cc3
+	state[0] = chacha20.cc0
+	state[1] = chacha20.cc1
+	state[2] = chacha20.cc2
+	state[3] = chacha20.cc3
 
 	state[4] = binary.little_endian_u32(key[0..4])
 	state[5] = binary.little_endian_u32(key[4..8])
@@ -233,14 +233,14 @@ fn block_generic(key []u8, counter u32, nonce []u8) ![]u8 {
 // encrypt_generic generates encrypted message from plaintext
 fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 	// bound early check
-	_, _ = key[chacha.key_size - 1], nonce[chacha.nonce_size - 1]
+	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
 	mut encrypted_message := []u8{}
 
-	for i := 0; i < plaintext.len / chacha.block_size; i++ {
+	for i := 0; i < plaintext.len / chacha20.block_size; i++ {
 		key_stream := block_generic(key, counter + u32(i), nonce) or {
 			return error('chacha20: encrypt_generic fail key_stream')
 		}
-		block := plaintext[i * chacha.block_size..(i + 1) * chacha.block_size]
+		block := plaintext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
 
 		// encrypted_message += block ^ key_stream
 		mut dst := []u8{len: block.len}
@@ -249,17 +249,17 @@ fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 		// encrypted_message = encrypted_message + dst
 		encrypted_message << dst
 	}
-	if plaintext.len % chacha.block_size != 0 {
-		j := plaintext.len / chacha.block_size
+	if plaintext.len % chacha20.block_size != 0 {
+		j := plaintext.len / chacha20.block_size
 		key_stream := block_generic(key, counter + u32(j), nonce) or {
 			return error('chacha20: encrypt_generic fail key_stream')
 		}
-		block := plaintext[j * chacha.block_size..]
+		block := plaintext[j * chacha20.block_size..]
 
 		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
 		mut dst := []u8{len: block.len}
 		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = dst[0..plaintext.len % chacha.block_size]
+		dst = dst[0..plaintext.len % chacha20.block_size]
 
 		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
 		encrypted_message << dst
@@ -270,12 +270,12 @@ fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 // decrypt_generic decrypts the ciphertext, opposites of encryption process
 fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 	// bound early check
-	_, _ = key[chacha.key_size - 1], nonce[chacha.nonce_size - 1]
+	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
 	mut decrypted_message := []u8{}
 
-	for i := 0; i < ciphertext.len / chacha.block_size; i++ {
+	for i := 0; i < ciphertext.len / chacha20.block_size; i++ {
 		key_stream := block_generic(key, counter + u32(i), nonce)!
-		block := ciphertext[i * chacha.block_size..(i + 1) * chacha.block_size]
+		block := ciphertext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
 
 		mut dst := []u8{len: block.len}
 		if subtle.inexact_overlap(block, key_stream) {
@@ -285,14 +285,14 @@ fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 
 		decrypted_message << dst
 	}
-	if ciphertext.len % chacha.block_size != 0 {
-		j := ciphertext.len / chacha.block_size
+	if ciphertext.len % chacha20.block_size != 0 {
+		j := ciphertext.len / chacha20.block_size
 		key_stream := block_generic(key, counter + u32(j), nonce)!
-		block := ciphertext[j * chacha.block_size..]
+		block := ciphertext[j * chacha20.block_size..]
 
 		mut dst := []u8{len: block.len}
 		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = dst[0..ciphertext.len % chacha.block_size]
+		dst = dst[0..ciphertext.len % chacha20.block_size]
 
 		decrypted_message << dst
 	}

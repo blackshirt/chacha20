@@ -1,11 +1,11 @@
-module chacha
+module chacha20
 
 import benchmark
 import encoding.hex
 
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
 fn test_onetime_key_gen() ! {
-	for i, v in chacha.otk_cases {
+	for i, v in chacha20.otk_cases {
 		key := hex.decode(v.key) or { panic(err.msg()) }
 		nonce := hex.decode(v.nonce) or { panic(err.msg()) }
 
@@ -167,7 +167,7 @@ fn test_quarter_round() {
 }
 
 fn test_chacha20_block_function() {
-	for c in chacha.test_cases {
+	for c in chacha20.test_cases {
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
 		block := block_generic(key_bytes, c.counter, nonce_bytes) or { return }
@@ -198,7 +198,7 @@ fn test_chacha20_block_serialized() {
 }
 
 fn test_chacha20_encrypt() {
-	for c in chacha.encryption_test_cases {
+	for c in chacha20.encryption_test_cases {
 		// println(c.title)
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
@@ -215,7 +215,7 @@ fn test_chacha20_encrypt() {
 }
 
 fn test_decrypt_generic() {
-	for c in chacha.encryption_test_cases {
+	for c in chacha20.encryption_test_cases {
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
 
@@ -231,7 +231,7 @@ fn test_decrypt_generic() {
 }
 
 fn test_chacha20_cipher_encrypt() {
-	for c in chacha.encryption_test_cases {
+	for c in chacha20.encryption_test_cases {
 		// println(c.title)
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
@@ -252,7 +252,7 @@ fn test_chacha20_cipher_encrypt() {
 }
 
 fn test_chacha20_cipher_decrypt() {
-	for c in chacha.encryption_test_cases {
+	for c in chacha20.encryption_test_cases {
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
 

@@ -2,7 +2,7 @@
 // Its based on https://datatracker.ietf.org/doc/html/draft-arciszewski-xchacha-03
 // so, its maybe outdated...
 
-module chacha
+module chacha20
 
 import encoding.binary
 

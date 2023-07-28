@@ -1,4 +1,4 @@
-module chacha
+module chacha20
 
 import encoding.hex
 
@@ -568,7 +568,7 @@ fn test_xchacha_encrypt_vector_test_a322() {
 }
 
 fn test_xchacha_encrypt_vector_test() {
-	for c in chacha.xchacha_vector_test {
+	for c in chacha20.xchacha_vector_test {
 		counter := u32(0)
 		plaintext_bytes := hex.decode(c.input) or { return }
 		key_bytes := hex.decode(c.key) or { return }
