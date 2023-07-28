@@ -2,13 +2,13 @@
 // Its based on https://datatracker.ietf.org/doc/html/draft-arciszewski-xchacha-03
 // so, its maybe outdated...
 
-module chacha20
+module chacha
 
 import encoding.binary
 
 // hchacha20 are intermediary step to build xchacha20 and initialized the same way as the ChaCha20 cipher,
 // except hchacha20 use a 128-bit (16 byte) nonce and has no counter to derive subkey
-fn hchacha20(key []byte, nonce []byte) []byte {
+fn hchacha20(key []u8, nonce []u8) []u8 {
 	// early bound check
 	_, _ = key[..key_size], nonce[..16]
 
@@ -46,7 +46,7 @@ fn hchacha20(key []byte, nonce []byte) []byte {
 		x3, x4, x9, x14 = quarter_round(x3, x4, x9, x14)
 	}
 
-	mut out := []byte{len: 32}
+	mut out := []u8{len: 32}
 
 	binary.little_endian_put_u32(mut out[0..4], x0)
 	binary.little_endian_put_u32(mut out[4..8], x1)
@@ -63,14 +63,15 @@ fn hchacha20(key []byte, nonce []byte) []byte {
 
 // eXtended nonce size (xchacha20) encrypt function
 // as specified in https://datatracker.ietf.org/doc/html/draft-arciszewski-xchacha-03
-fn encrypt_extended(key []byte, ctr u32, nonce []byte, plaintext []byte) ?[]byte {
+fn encrypt_extended(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	if nonce.len != x_nonce_size {
-		return error('xchacha: wrong x nonce size: $nonce.len')
+		return error('xchacha: wrong x nonce size: ${nonce.len}')
 	}
 	subkey := hchacha20(key, nonce[0..16])
 	mut cnonce := nonce[16..24].clone()
-	cnonce.prepend([byte(0x00), 0x00, 0x00, 0x00])
-	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext) ?
+
+	cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
+	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext)!
 
 	return ciphertext
 }
