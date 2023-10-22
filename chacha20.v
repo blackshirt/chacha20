@@ -259,7 +259,7 @@ fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
 		mut dst := []u8{len: block.len}
 		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = dst[0..plaintext.len % chacha20.block_size]
+		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
 
 		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
 		encrypted_message << dst
@@ -292,7 +292,8 @@ fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 
 		mut dst := []u8{len: block.len}
 		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = dst[0..ciphertext.len % chacha20.block_size]
+		// use unsafe or explicit .clone()
+		dst = unsafe { dst[0..ciphertext.len % chacha20.block_size] }
 
 		decrypted_message << dst
 	}
