@@ -11,24 +11,23 @@ import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
 
-pub const (
-	// key_size is key size of ChaCha20 key (256 bits size), in bytes
-	key_size     = 32
-	// nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
-	nonce_size   = 12
-	// extended nonce size of chacha20, called xchacha20, 192 bits nonce size
-	x_nonce_size = 24
-	// ChaCha20 block size, in bytes
-	block_size   = 64
-)
+
+// key_size is key size of ChaCha20 key (256 bits size), in bytes
+pub const key_size     = 32
+// nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
+pub const nonce_size   = 12
+// extended nonce size of chacha20, called xchacha20, 192 bits nonce size
+pub const x_nonce_size = 24
+// ChaCha20 block size, in bytes
+pub const block_size   = 64
+
 
 // first of four words ChaCha20 state constant
-const (
-	cc0 = u32(0x61707865)
-	cc1 = u32(0x3320646e)
-	cc2 = u32(0x79622d32)
-	cc3 = u32(0x6b206574)
-)
+const cc0 = u32(0x61707865) // expa
+const cc1 = u32(0x3320646e) // nd 3
+const cc2 = u32(0x79622d32) // 2-by
+const cc3 = u32(0x6b206574) // te k
+
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
