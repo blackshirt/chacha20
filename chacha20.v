@@ -31,6 +31,7 @@ const cc3 = u32(0x6b206574) // te k
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
+	block_size = chacha20.block_size
 	// key
 	key []u8
 	// nonce
@@ -39,6 +40,30 @@ mut:
 	counter u32
 }
 
+//interface Block {
+//	block_size int // block_size returns the cipher's block size.
+//	encrypt(mut dst []u8, src []u8) // Encrypt encrypts the first block in src into dst.
+//	// Dst and src must overlap entirely or not at all.
+//	decrypt(mut dst []u8, src []u8) // Decrypt decrypts the first block in src into dst.
+//	// Dst and src must overlap entirely or not at all.
+//}
+
+fn (mut c Cipher) encrypt_generic(mut dst_ []u8, src_ []u8) {
+	unsafe {
+		mut dst := *dst_
+		mut src := src_
+		
+		if dst.len < src.len {
+			panic('chacha20: output smaller than input')
+		}
+		if subtle.inexact_overlap(dst[..src.len], src_) {
+			panic('chacha20: invalid buffer overlap')
+		}
+		out := encrypt_generic(c.key, c.counter, c.nonce, src) ! // []u8 {
+		copy(mut dst, out) 
+	}
+}
+	
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
