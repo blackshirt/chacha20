@@ -1,5 +1,76 @@
 module chacha20
 
+import crypto.internal.subtle
+	
+// xor_key_stream fullfills `cipher.Stream` interface
+fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
+	if src.len == 0 {
+		return
+	}
+	if dst.len < src.len {
+		panic("chacha20: dest smaller than src")
+	}
+	dst = unsafe { dst[..src.len] }
+	if subtle.in_exact_oerlap(dst, src) {
+		panic("chacha20: invalid buffer overlap")
+	}
+
+	// First, drain any remaining key stream from a previous XORKeyStream.
+	if c.len_ks != 0 {
+		mut key_stream := c.buf[buf_size - sc.len_ks..]
+		if src.len < key_stream.len {
+			key_stream = unsafe { key_stream[..src.len] }
+		}
+		// bounds check elimination hint
+		_ = src[key_stream.len-1] 
+		for i, b in key_stream {
+			dst[i] = src[i] ^ b
+		}
+		s.len_ks -= key_stream.len
+		dst = unsafe { dst[key_stream.len..] }
+		src = unsafe { src[key_stream.len..] }
+	}
+	if src.len == 0 {
+		return
+	}
+
+	num_blocks := (u64(src.len) + block_size - 1) / block_size
+	if c.overflow || u64(c.counter)+num_blocks > 1<<32 {
+		panic("chacha20: counter overflow")
+	} else if u64(c.counter)+num_blocks == 1<<32 {
+		c.overflow = true
+	}
+
+	full := src.len - src.len % buf_size
+	if full > 0 {
+		c.xor_key_stream_blocks(mut dst[..full], src[..full])
+	}
+	dst = unsafe { dst[full..] }
+	src = unsafe { src[full..] }
+
+	// If using a multi-block xorKeyStreamBlocks would overflow, use the generic
+	// one that does one block at a time.
+	blocks_perbuf := buf_size / block_size
+	if u64(c.counter)+blocks_perbuf > 1<<32 {
+		s.buf = []u8{len:buf_size}
+		num_blocks := (src.len + block_size - 1) / block_size
+		mut buf := s.buf[buf_size-num_blocks*block_size..]
+		copy(mut buf, src)
+		c.xor_key_stream_blocks_generic(mut buf, buf)
+		c.len_ks = buf.len - copy(mut dst, buf)
+		return
+	}
+
+	// If we have a partial (multi-)block, pad it for xorKeyStreamBlocks, and
+	// keep the leftover keystream for the next XORKeyStream invocation.
+	if len(src) > 0 {
+		s.buf = [bufSize]byte{}
+		copy(s.buf[:], src)
+		s.xorKeyStreamBlocks(s.buf[:], s.buf[:])
+		s.len = bufSize - copy(dst, s.buf[:])
+	}
+}
+		
 // adapted from go version
 // reads a little endian u32 from src, XORs it with (a + b) and
 // places the result in little endian byte order in dst.
