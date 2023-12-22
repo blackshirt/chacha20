@@ -159,9 +159,10 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 	}
 	return error('wrong nonce size')
 }
-
-// quarter_round was core chacha20 round function, its operates on quartet unsigned integer
-// by performing AXR (add, xor, rotate) operation on this numbers.
+		
+// quarter_round is the basic operation of the ChaCha algorithm. It operates 
+// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate) 
+// operation on this quartet u32 numbers.
 fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 	mut ax := a
 	mut bx := b
