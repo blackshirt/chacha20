@@ -9,8 +9,8 @@ fn add_and_xoring(mut dst []u8, src []u8, a u32, b u32) {
 	_ = dst[3] 
 	
 	mut v := u32(src[0])
-	v |= u32(src[1]) << 
-	v |= u32(src[2]) << 1
+	v |= u32(src[1]) << 8
+	v |= u32(src[2]) << 16
 	v |= u32(src[3]) << 24
 	v ^= (a + b)
 		
