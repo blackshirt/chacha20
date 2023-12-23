@@ -40,6 +40,44 @@ mut:
 	counter u32
 }
 
+type ChachaState = [16]u32
+
+// initializes ChaCha20 state
+fn ChachaState.init(key []u8, ctr u32, nonce []u8) ChachaState {
+	if key.len != key_size || nonce.len != nonce_size {
+		panic("chacha20: bad key or nonce length")
+	}
+	// The ChaCha20 state is initialized as follows:
+	// cccccccc  cccccccc  cccccccc  cccccccc
+        // kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+        // kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+        // bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
+	// where c=constant k=key b=blockcount n=nonce
+
+	mut cs :=  [16]u32{}
+	cs[0] = cc0
+	cs[1] = cc1
+	cs[2] = cc2
+	cs[3] = cc3
+
+	cs[4] = binary.little_endian_u32(key[0..4])
+	cs[5] = binary.little_endian_u32(key[4..8])
+	cs[6] = binary.little_endian_u32(key[8..12])
+	cs[7] = binary.little_endian_u32(key[12..16])
+
+	cs[8] = binary.little_endian_u32(key[16..20])
+	cs[9] = binary.little_endian_u32(key[20..24])
+	cs[10] = binary.little_endian_u32(key[24..28])
+	cs[11] = binary.little_endian_u32(key[28..32])
+
+	cs[12] = counter
+	cs[13] = binary.little_endian_u32(nonce[0..4])
+	cs[14] = binary.little_endian_u32(nonce[4..8])
+	cs[15] = binary.little_endian_u32(nonce[8..12])
+
+	return ChachaState(cs)
+}
+	
 //interface Block {
 //	block_size int // block_size returns the cipher's block size.
 //	encrypt(mut dst []u8, src []u8) // Encrypt encrypts the first block in src into dst.
