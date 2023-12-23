@@ -164,6 +164,13 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 // on four 32-bit unsigned integers, by performing AXR (add, xor, rotate) 
 // operation on this quartet u32 numbers.
 fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
+        // The operation is as follows (in C-like notation):
+        // where `<<<=` denotes bits rotate left operation
+	// a += b; d ^= a; d <<<= 16;
+	// c += d; b ^= c; b <<<= 12;
+	// a += b; d ^= a; d <<<= 8;
+	// c += d; b ^= c; b <<<= 7;
+	
 	mut ax := a
 	mut bx := b
 	mut cx := c
