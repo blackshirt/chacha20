@@ -101,22 +101,23 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 	}
 
 	// initial state
-	c0, c1, c2, c3   := cc0, cc1, cc2, cc3
-	c4, c5, c6, c7   := s.key[0], s.key[1], s.key[2], s.key[3]
-	c8, c9, c10, c11 := s.key[4], s.key[5], s.key[6], s.key[7]
-	_, c13, c14, c15 := s.counter, s.nonce[0], s.nonce[1], s.nonce[2]
+	cs := ChachaState.init(c.key, c.counter, c.nonce)
+	// c0, c1, c2, c3   := cc0, cc1, cc2, cc3
+	// c4, c5, c6, c7   := s.key[0], s.key[1], s.key[2], s.key[3]
+	// c8, c9, c10, c11 := s.key[4], s.key[5], s.key[6], s.key[7]
+	// _, c13, c14, c15 := s.counter, s.nonce[0], s.nonce[1], s.nonce[2]
 	
         // caches part of first round
 	if !s.precomp_done {
-		s.p1, s.p5, s.p9, s.p13 = quarter_round(c1, c5, c9, c13)
-		s.p2, s.p6, s.p10, s.p14 = quarter_round(c2, c6, c10, c14)
-		s.p3, s.p7, s.p11, s.p15 = quarterRound(c3, c7, c11, c15)
+		s.p1, s.p5, s.p9, s.p13 = quarter_round(cs[1], cs[5], cs[9], cs[13])
+		s.p2, s.p6, s.p10, s.p14 = quarter_round(cs[2], cs[6], cs[10], cs[14])
+		s.p3, s.p7, s.p11, s.p15 = quarterRound(cs[3], cs[7], cs[11], cs[15])
 		s.precomp_done = true
 	}
 
 	for src.len >= 64 && dst.len >= 64 {
 		// The remainder of the first column round.
-		fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, s.counter)
+		fcr0, fcr4, fcr8, fcr12 := quarter_round(cs[0], cs[4], cs[8], s.counter)
 
 		// The second diagonal round.
 		x0, x5, x10, x15 := quarter_round(fcr0, s.p5, s.p10, s.p15)
@@ -153,7 +154,7 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 		add_and_xoring(mut dst[36:40], src[36:40], x9, c9)
 		add_and_xoring(mut dst[40:44], src[40:44], x10, c10)
 		add_and_xoring(mut dst[44:48], src[44:48], x11, c11)
-		add_and_xoring(mutvdst[48:52], src[48:52], x12, s.counter)
+		add_and_xoring(mut dst[48:52], src[48:52], x12, s.counter)
 		add_and_xoring(mut dst[52:56], src[52:56], x13, c13)
 		add_and_xoring(mut dst[56:60], src[56:60], x14, c14)
 		add_and_xoring(mut dst[60:64], src[60:64], x15, c15)
