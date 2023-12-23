@@ -18,8 +18,8 @@ pub const key_size     = 32
 pub const nonce_size   = 12
 // extended nonce size of chacha20, called xchacha20, 192 bits nonce size
 pub const x_nonce_size = 24
-// ChaCha20 block size, in bytes
-pub const block_size   = 64
+// internal block size ChaCha20 operates on, in bytes
+const block_size   = 64
 
 
 // first of four words ChaCha20 state constant
