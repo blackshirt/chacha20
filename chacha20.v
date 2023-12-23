@@ -40,6 +40,7 @@ mut:
 	counter u32
 }
 
+// ChachaState represents ChaCha20 state, represented in 4x4 u32 vector
 type ChachaState = [16]u32
 
 // initializes ChaCha20 state
@@ -49,8 +50,8 @@ fn ChachaState.init(key []u8, ctr u32, nonce []u8) ChachaState {
 	}
 	// The ChaCha20 state is initialized as follows:
 	// cccccccc  cccccccc  cccccccc  cccccccc
-        // kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
-        // kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
+	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
         // bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
 	// where c=constant k=key b=blockcount n=nonce
 
@@ -70,7 +71,7 @@ fn ChachaState.init(key []u8, ctr u32, nonce []u8) ChachaState {
 	cs[10] = binary.little_endian_u32(key[24..28])
 	cs[11] = binary.little_endian_u32(key[28..32])
 
-	cs[12] = counter
+	cs[12] = ctr
 	cs[13] = binary.little_endian_u32(nonce[0..4])
 	cs[14] = binary.little_endian_u32(nonce[4..8])
 	cs[15] = binary.little_endian_u32(nonce[8..12])
