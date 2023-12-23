@@ -52,7 +52,7 @@ fn ChachaState.init(key []u8, ctr u32, nonce []u8) ChachaState {
 	// cccccccc  cccccccc  cccccccc  cccccccc
 	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
-        // bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
+	// bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
 	// where c=constant k=key b=blockcount n=nonce
 
 	mut cs :=  [16]u32{}
