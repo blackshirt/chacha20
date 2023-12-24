@@ -119,21 +119,25 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 	c13 := binary.little_endian_u32(c.nonce[0..4])
 	c14 := binary.little_endian_u32(c.nonce[4..8])
 	c15 := binary.little_endian_u32(c.nonce[8..12])
-		
+
+	// precomputed
+	p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
+	p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
+	p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
+	
 	for src.len >= 64 && dst.len >= 64 {
-		// The remainder of the first column round.
-		fcr0, fcr4, fcr8, fcr12 := quarter_round(cs[0], cs[4], cs[8], s.counter)
+		fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
 
 		// The second diagonal round.
-		x0, x5, x10, x15 := quarter_round(fcr0, s.p5, s.p10, s.p15)
-		x1, x6, x11, x12 := quarter_round(s.p1, s.p6, s.p11, fcr12)
-		x2, x7, x8, x13 := quarter_round(s.p2, s.p7, fcr8, s.p13)
-		x3, x4, x9, x14 := quarter_round(s.p3, fcr4, s.p9, s.p14)
+		mut x0, mut x5, mut x10, mut x15 := quarter_round(fcr0, p5, p10, p15)
+		mut x1, mut x6, mut x11, mut x12 := quarter_round(p1, p6, p11, fcr12)
+		mut x2, mut x7, mut x8, mut x13 := quarter_round(p2, p7, fcr8, p13)
+		mut x3, mut x4, mut x9, mut x14 := quarter_round(p3, fcr4, p9, p14)
 
 		// The remaining 18 rounds.
 		for i := 0; i < 9; i++ {
 			// Column round.
-			x0, x4, x8, x12 = quarterRound(x0, x4, x8, x12)
+			x0, x4, x8, x12 = quarter_round(x0, x4, x8, x12)
 			x1, x5, x9, x13 = quarter_round(x1, x5, x9, x13)
 			x2, x6, x10, x14 = quarter_round(x2, x6, x10, x14)
 			x3, x7, x11, x15 = quarter_round(x3, x7, x11, x15)
@@ -159,7 +163,7 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 		add_and_xoring(mut dst[36:40], src[36:40], x9, c9)
 		add_and_xoring(mut dst[40:44], src[40:44], x10, c10)
 		add_and_xoring(mut dst[44:48], src[44:48], x11, c11)
-		add_and_xoring(mut dst[48:52], src[48:52], x12, s.counter)
+		add_and_xoring(mut dst[48:52], src[48:52], x12, c.counter)
 		add_and_xoring(mut dst[52:56], src[52:56], x13, c13)
 		add_and_xoring(mut dst[56:60], src[56:60], x14, c14)
 		add_and_xoring(mut dst[60:64], src[60:64], x15, c15)
