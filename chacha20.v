@@ -32,9 +32,9 @@ const cc3 = u32(0x6b206574) // te k
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
 	block_size = chacha20.block_size
-	// key
+	// key of key_size bytes length
 	key []u8
-	// nonce
+	// nonce of nonce_size bytes length
 	nonce []u8
 mut:
 	counter u32
