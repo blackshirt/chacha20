@@ -74,7 +74,7 @@ fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 // adapted from go version
 // reads a little endian u32 from src, XORs it with (a + b) and
 // places the result in little endian byte order in dst.
-fn add_and_xoring(mut dst []u8, src []u8, a u32, b u32) {
+fn axr(mut dst []u8, src []u8, a u32, b u32) {
 	// bounds check elimination hint
 	_ = src[3]
 	_ = dst[3] 
@@ -95,16 +95,23 @@ fn  (mut c Cipher) xor_keystream_blocks(mut dst []u8, src []u8) {
 	c.chacha20_block_generic(mut dst, src)
 }
 
-// chacha20_block_generic is a generic ChaCha20 Block Function as defined in RFC 8439
+// chacha20_block_generic is a generic ChaCha20 Block Function as defined in RFC 8439.
+// defined in pseudocode
+// chacha20_block(key, counter, nonce):
+//         state = constants | key | counter | nonce
+//         initial_state = state
+//         for i=1 upto 10
+//            inner_block(state)
+//            end
+//         state += initial_state
+//         return serialize(state)
+//
 fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	if dst.len != src.len || (dst.len % block_size) != 0 {
 		panic("chacha20 error: wrong dst and/or src length")
 	}
 
-	// initialize ChaCha20 state
-	// cs := ChachaState.init(c.key, c.counter, c.nonce)
-	// the go version caches three first quarter round thats not depend on counter
-	// todo: follow the go for caches
+	// initializes ChaCha20 state
 	c0, c1, c2, c3   := cc0, cc1, cc2, cc3
 	c4 := binary.little_endian_u32(c.key[0..4])
 	c5 := binary.little_endian_u32(c.key[4..8])
@@ -133,14 +140,16 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	// Qround(state, 2, 7, 8, 13)
 	// Qround(state, 3, 4, 9, 14)
 	
-		
-	// precomputed first column quarter round that not depend to counter
+	// The Go version, precomputes three first column round thats not 
+	// depend on counter
+	// TODO: folloe the Go version 
+	// precomputed three first column round.
 	p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
 	p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
 	p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
 	
 	for src.len >= 64 && dst.len >= 64 {
-		// remaining column roundp
+		// remaining first column round
 		fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
 
 		// The second diagonal round.
@@ -164,26 +173,27 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 			x3, x4, x9, x14 = quarter_round(x3, x4, x9, x14)
 		}
 
-		// Add back the initial state to generate the key stream, then
+		// Add back the initial ChaCha20 state to generate the key stream, then
 		// XOR the key stream with the source and write out the result.
-		add_and_xoring(mut dst[0:4], src[0:4], x0, c0)
-		add_and_xoring(mut dst[4:8], src[4:8], x1, c1)
-		add_and_xoring(mut dst[8:12], src[8:12], x2, c2)
-		add_and_xoring(mut dst[12:16], src[12:16], x3, c3)
-		add_and_xoring(mut dst[16:20], src[16:20], x4, c4)
-		add_and_xoring(mut dst[20:24], src[20:24], x5, c5)
-		add_and_xoring(mut dst[24:28], src[24:28], x6, c6)
-		add_and_xoring(mut dst[28:32], src[28:32], x7, c7)
-		add_and_xoring(mut dst[32:36], src[32:36], x8, c8)
-		add_and_xoring(mut dst[36:40], src[36:40], x9, c9)
-		add_and_xoring(mut dst[40:44], src[40:44], x10, c10)
-		add_and_xoring(mut dst[44:48], src[44:48], x11, c11)
-		add_and_xoring(mut dst[48:52], src[48:52], x12, c.counter)
-		add_and_xoring(mut dst[52:56], src[52:56], x13, c13)
-		add_and_xoring(mut dst[56:60], src[56:60], x14, c14)
-		add_and_xoring(mut dst[60:64], src[60:64], x15, c15)
+		axr(mut dst[0:4], src[0:4], x0, c0)
+		axr(mut dst[4:8], src[4:8], x1, c1)
+		axr(mut dst[8:12], src[8:12], x2, c2)
+		axr(mut dst[12:16], src[12:16], x3, c3)
+		axr(mut dst[16:20], src[16:20], x4, c4)
+		axr(mut dst[20:24], src[20:24], x5, c5)
+		axr(mut dst[24:28], src[24:28], x6, c6)
+		axr(mut dst[28:32], src[28:32], x7, c7)
+		axr(mut dst[32:36], src[32:36], x8, c8)
+		axr(mut dst[36:40], src[36:40], x9, c9)
+		axr(mut dst[40:44], src[40:44], x10, c10)
+		axr(mut dst[44:48], src[44:48], x11, c11)
+		axr(mut dst[48:52], src[48:52], x12, c.counter)
+		axr(mut dst[52:56], src[52:56], x13, c13)
+		axr(mut dst[56:60], src[56:60], x14, c14)
+		axr(mut dst[60:64], src[60:64], x15, c15)
 
-		s.counter += 1
+		// updates ChaCha20 counter
+		c.counter += 1
 
 		src = unsafe { src[block_size..] }
 		dst = unsafe { dst[block_size..] }
