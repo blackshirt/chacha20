@@ -100,11 +100,11 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 		panic("chacha20 error: wrong dst and/or src length")
 	}
 
-	// initial state
+	// initialize ChaCha20 state
 	// cs := ChachaState.init(c.key, c.counter, c.nonce)
-	c0, c1, c2, c3   := cc0, cc1, cc2, cc3
 	// the go version caches three first quarter round thats not depend on counter
 	// todo: follow the go for caches
+	c0, c1, c2, c3   := cc0, cc1, cc2, cc3
 	c4 := binary.little_endian_u32(c.key[0..4])
 	c5 := binary.little_endian_u32(c.key[4..8])
 	c6 := binary.little_endian_u32(c.key[8..12])
@@ -119,13 +119,27 @@ fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
 	c13 := binary.little_endian_u32(c.nonce[0..4])
 	c14 := binary.little_endian_u32(c.nonce[4..8])
 	c15 := binary.little_endian_u32(c.nonce[8..12])
-
-	// precomputed
+         
+	// inner_block (state):
+	// column round
+	// Qround(state, 0, 4, 8, 12)
+	// Qround(state, 1, 5, 9, 13)
+	// Qround(state, 2, 6, 10, 14)
+	// Qround(state, 3, 7, 11, 15)
+	// diagonal round
+	// Qround(state, 0, 5, 10, 15)
+	// Qround(state, 1, 6, 11, 12)
+	// Qround(state, 2, 7, 8, 13)
+	// Qround(state, 3, 4, 9, 14)
+	
+		
+	// precomputed first column quarter round that not depend to counter
 	p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
 	p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
 	p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
 	
 	for src.len >= 64 && dst.len >= 64 {
+		// remaining column roundp
 		fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
 
 		// The second diagonal round.
