@@ -92,10 +92,11 @@ fn add_and_xoring(mut dst []u8, src []u8, a u32, b u32) {
 }
 	
 fn  (mut c Cipher) xor_keystream_blocks(mut dst []u8, src []u8) {
-	c.xor_keystream_blocks_generic(mut dst, src)
+	c.chacha20_block_generic(mut dst, src)
 }
-	
-fn (mut c Cipher) xor_keystream_blocks_generic(mut dst []u8, src []u8) {
+
+// chacha20_block_generic is a generic ChaCha20 Block Function as defined in RFC 8439
+fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	if dst.len != src.len || (dst.len % block_size) != 0 {
 		panic("chacha20 error: wrong dst and/or src length")
 	}
