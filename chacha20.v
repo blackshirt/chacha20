@@ -20,6 +20,7 @@ pub const nonce_size   = 12
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size   = 64
+const buf_size     = block_size
 
 // first of four words ChaCha20 state constant
 const cc0 = u32(0x61707865) // expa
@@ -32,7 +33,7 @@ const cc3 = u32(0x6b206574) // te k
 struct Cipher {
 	block_size = chacha20.block_size
 	key   []u8 // key_size of bytes length
-	nonce []u8 // nonce_size of bytes length
+	nonce []u8 // (x)_nonce_size of bytes length
 mut:
 	counter u32
 }
