@@ -32,10 +32,8 @@ const cc3 = u32(0x6b206574) // te k
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
 	block_size = chacha20.block_size
-	// key of key_size bytes length
-	key []u8
-	// nonce of nonce_size bytes length
-	nonce []u8
+	key   []u8 // key_size of bytes length
+	nonce []u8 // nonce_size of bytes length
 mut:
 	counter u32
 }
@@ -109,13 +107,13 @@ fn (mut c Cipher) encrypt_generic(mut dst_ []u8, src_ []u8) {
 // This is the only exported function to create initialized Cipher instances.
 //
 // Note: see `encrypt` or `README` notes.
-pub fn new_cipher(key []u8, nonce []u8) !Cipher {
+pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	if key.len != chacha20.key_size {
-		return error('error wrong key size provided ')
+		return error('chacha20: bad key size provided ')
 	}
 
 	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
-		return error('error nonce size provided')
+		return error('chacha20: Bad nonce size provided')
 	}
 	mut nonces := nonce.clone()
 	mut keys := key.clone()
@@ -132,7 +130,7 @@ pub fn new_cipher(key []u8, nonce []u8) !Cipher {
 		return error('chacha20: wrong nonce size')
 	}
 
-	c := Cipher{
+	c := &Cipher{
 		key: keys
 		nonce: nonces
 	}
