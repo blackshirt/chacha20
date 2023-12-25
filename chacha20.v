@@ -35,7 +35,11 @@ struct Cipher {
 	key   []u8 // key_size of bytes length
 	nonce []u8 // (x)_nonce_size of bytes length
 mut:
-	counter u32
+	counter  u32
+	overflow bool
+
+	buf_ks    []u8 // buf_size bytes
+	lfo_kslen int
 }
 
 // ChachaState represents ChaCha20 state, represented in 4x4 u32 vector
@@ -152,10 +156,21 @@ pub fn (c Cipher) decrypt(ciphertext []u8) ![]u8 {
 	return encrypt(c.key, c.counter, c.nonce, ciphertext)
 }
 
-// set_counter sets the Cipher counter
+// set_counter sets the Chacha20 Cipher counter
 pub fn (mut c Cipher) set_counter(ctr u32) {
 	// WARNING: maybe racy
-	c.counter = ctr
+	// c.counter = ctr
+	octr := c.counter - u32(c.lfo_kslen/block_size)
+	if c.overflow || ctr < octr {
+		panic("chacha20: counter overflow")
+	}
+
+	if ctr < c.counter {
+		c.lfo_kslen = int(c.counter - ctr) * block_size
+	} else {
+		s.counter = ctr
+		s.lfo_kslen = 0
+	}
 }
 
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
