@@ -21,7 +21,6 @@ pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size   = 64
 
-
 // first of four words ChaCha20 state constant
 const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
