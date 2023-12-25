@@ -11,7 +11,7 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		panic("chacha20: dest smaller than src")
 	}
 	dst = unsafe { dst[..src.len] }
-	if subtle.in_exact_oerlap(dst, src) {
+	if subtle.inexact_oerlap(dst, src) {
 		panic("chacha20: invalid buffer overlap")
 	}
 
@@ -23,6 +23,7 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		}
 		// bounds check elimination hint
 		_ = src[key_stream.len-1] 
+		// _ := cipher.xor_bytes(mut dst, block, key_stream)
 		for i, b in key_stream {
 			dst[i] = src[i] ^ b
 		}
