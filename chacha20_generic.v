@@ -3,7 +3,7 @@ module chacha20
 import crypto.internal.subtle
 	
 // xor_key_stream fullfills `cipher.Stream` interface
-fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
+pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if src.len == 0 {
 		return
 	}
@@ -52,22 +52,22 @@ fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	// one that does one block at a time.
 	blocks_perbuf := buf_size / block_size
 	if u64(c.counter)+blocks_perbuf > 1<<32 {
-		s.buf = []u8{len:buf_size}
+		s.buf = []u8{len: buf_size}
 		num_blocks := (src.len + block_size - 1) / block_size
-		mut buf := s.buf[buf_size-num_blocks*block_size..]
-		copy(mut buf, src)
-		c.xor_key_stream_blocks_generic(mut buf, buf)
+		mut buf := c.buf[buf_size-num_blocks*block_size..]
+		_ := copy(mut buf, src)
+		c.xor_key_stream_blocks(mut buf, buf)
 		c.len_ks = buf.len - copy(mut dst, buf)
 		return
 	}
 
 	// If we have a partial (multi-)block, pad it for xorKeyStreamBlocks, and
 	// keep the leftover keystream for the next XORKeyStream invocation.
-	if len(src) > 0 {
-		s.buf = [bufSize]byte{}
-		copy(s.buf[:], src)
-		s.xorKeyStreamBlocks(s.buf[:], s.buf[:])
-		s.len = bufSize - copy(dst, s.buf[:])
+	if src.len > 0 {
+		c.buf = []u8{len: buf_size}
+		copy(mut s.buf[..], src)
+		c.xor_key_stream_blocks(s.buf[..], s.buf[..])
+		c.len = buf_size - copy(mut dst, s.buf[..])
 	}
 }
 		
@@ -91,7 +91,7 @@ fn axr(mut dst []u8, src []u8, a u32, b u32) {
 	dst[3] = u8(v >> 24)
 }
 	
-fn  (mut c Cipher) xor_keystream_blocks(mut dst []u8, src []u8) {
+fn  (mut c Cipher) xor_key_stream_blocks(mut dst []u8, src []u8) {
 	c.chacha20_block_generic(mut dst, src)
 }
 
