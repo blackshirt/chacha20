@@ -95,8 +95,7 @@ fn  (mut c Cipher) xor_keystream_blocks(mut dst []u8, src []u8) {
 	c.chacha20_block_generic(mut dst, src)
 }
 
-// chacha20_block_generic is a generic ChaCha20 Block Function as defined in RFC 8439.
-// defined in pseudocode
+// chacha20_block_generic is a generic ChaCha20 Block Function as described in RFC 8439.
 // chacha20_block(key, counter, nonce):
 //         state = constants | key | counter | nonce
 //         initial_state = state
@@ -105,6 +104,16 @@ fn  (mut c Cipher) xor_keystream_blocks(mut dst []u8, src []u8) {
 //            end
 //         state += initial_state
 //         return serialize(state)
+// where :
+// inner_block (state):
+//      Qround(state, 0, 4, 8, 12)
+//      Qround(state, 1, 5, 9, 13)
+//      Qround(state, 2, 6, 10, 14)
+//      Qround(state, 3, 7, 11, 15)
+//      Qround(state, 0, 5, 10, 15)
+//      Qround(state, 1, 6, 11, 12)
+//      Qround(state, 2, 7, 8, 13)
+//      Qround(state, 3, 4, 9, 14)
 //
 fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	if dst.len != src.len || (dst.len % block_size) != 0 {
@@ -128,21 +137,10 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	c14 := binary.little_endian_u32(c.nonce[4..8])
 	c15 := binary.little_endian_u32(c.nonce[8..12])
          
-	// inner_block (state):
-	// column round
-	// Qround(state, 0, 4, 8, 12)
-	// Qround(state, 1, 5, 9, 13)
-	// Qround(state, 2, 6, 10, 14)
-	// Qround(state, 3, 7, 11, 15)
-	// diagonal round
-	// Qround(state, 0, 5, 10, 15)
-	// Qround(state, 1, 6, 11, 12)
-	// Qround(state, 2, 7, 8, 13)
-	// Qround(state, 3, 4, 9, 14)
 	
-	// The Go version, precomputes three first column round thats not 
-	// depend on counter
-	// TODO: folloe the Go version 
+	// The Go version, precomputes three first column round 
+	// thats not depend on counter
+	// TODO: follow the Go version 
 	// precomputed three first column round.
 	p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
 	p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
@@ -198,6 +196,5 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 		src = unsafe { src[block_size..] }
 		dst = unsafe { dst[block_size..] }
 	}
-		
 }
 	
