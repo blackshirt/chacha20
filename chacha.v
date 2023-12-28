@@ -11,16 +11,15 @@ import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
 
-
 // key_size is key size of ChaCha20 key (256 bits size), in bytes
-pub const key_size     = 32
+pub const key_size = 32
 // nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
-pub const nonce_size   = 12
+pub const nonce_size = 12
 // extended nonce size of chacha20, called xchacha20, 192 bits nonce size
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
-const block_size   = 64
-const buf_size     = block_size
+const block_size = 64
+const buf_size = block_size
 
 // first of four words ChaCha20 state constant
 const cc0 = u32(0x61707865) // expa
@@ -28,83 +27,33 @@ const cc1 = u32(0x3320646e) // nd 3
 const cc2 = u32(0x79622d32) // 2-by
 const cc3 = u32(0x6b206574) // te k
 
-
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
-	block_size = chacha20.block_size
-	key   []u8 // key_size of bytes length
-	nonce []u8 // (x)_nonce_size of bytes length
+	block_size int = chacha20.block_size
+	key        []u8 // key_size of bytes length
+	nonce      []u8 // (x)_nonce_size of bytes length
 mut:
-	counter  u32
-	overflow bool
-
-	buf_ks    []u8 // buf_size bytes
-	lfo_kslen int
+	counter u32
+	eof     bool
+	ksbuf   []u8 // buf_size bytes
+	kslen   int
 }
 
-// ChachaState represents ChaCha20 state, represented in 4x4 u32 vector
-type ChachaState = [16]u32
-
-// initializes ChaCha20 state
-fn ChachaState.init(key []u8, ctr u32, nonce []u8) ChachaState {
-	if key.len != key_size || nonce.len != nonce_size {
-		panic("chacha20: bad key or nonce length")
-	}
-	// The ChaCha20 state is initialized as follows:
-	// cccccccc  cccccccc  cccccccc  cccccccc
-	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
-	// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
-	// bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
-	// where c=constant k=key b=blockcount n=nonce
-
-	mut cs :=  [16]u32{}
-	cs[0] = cc0
-	cs[1] = cc1
-	cs[2] = cc2
-	cs[3] = cc3
-
-	cs[4] = binary.little_endian_u32(key[0..4])
-	cs[5] = binary.little_endian_u32(key[4..8])
-	cs[6] = binary.little_endian_u32(key[8..12])
-	cs[7] = binary.little_endian_u32(key[12..16])
-
-	cs[8] = binary.little_endian_u32(key[16..20])
-	cs[9] = binary.little_endian_u32(key[20..24])
-	cs[10] = binary.little_endian_u32(key[24..28])
-	cs[11] = binary.little_endian_u32(key[28..32])
-
-	cs[12] = ctr
-	cs[13] = binary.little_endian_u32(nonce[0..4])
-	cs[14] = binary.little_endian_u32(nonce[4..8])
-	cs[15] = binary.little_endian_u32(nonce[8..12])
-
-	return ChachaState(cs)
-}
-	
-//interface Block {
-//	block_size int // block_size returns the cipher's block size.
-//	encrypt(mut dst []u8, src []u8) // Encrypt encrypts the first block in src into dst.
-//	// Dst and src must overlap entirely or not at all.
-//	decrypt(mut dst []u8, src []u8) // Decrypt decrypts the first block in src into dst.
-//	// Dst and src must overlap entirely or not at all.
-//}
-
-fn (mut c Cipher) encrypt_generic(mut dst_ []u8, src_ []u8) {
+fn (mut c Cipher) encrypt_generic(mut dst []u8, src []u8) {
 	unsafe {
-		mut dst := *dst_
-		mut src := src_
-		
-		if dst.len < src.len {
+		mut dst_ := *dst
+
+		if dst_.len < src.len {
 			panic('chacha20: output smaller than input')
 		}
-		if subtle.inexact_overlap(dst[..src.len], src_) {
+		if subtle.inexact_overlap(dst[..src.len], src) {
 			panic('chacha20: invalid buffer overlap')
 		}
-		out := encrypt_generic(c.key, c.counter, c.nonce, src) ! // []u8 {
-		copy(mut dst, out) 
+		out := encrypt_generic(c.key, c.counter, c.nonce, src)! // []u8 {
+		copy(mut dst, out)
 	}
 }
-	
+
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
@@ -160,16 +109,16 @@ pub fn (c Cipher) decrypt(ciphertext []u8) ![]u8 {
 pub fn (mut c Cipher) set_counter(ctr u32) {
 	// WARNING: maybe racy
 	// c.counter = ctr
-	octr := c.counter - u32(c.lfo_kslen/block_size)
-	if c.overflow || ctr < octr {
-		panic("chacha20: counter overflow")
+	octr := c.counter - u32(c.kslen / chacha20.block_size)
+	if c.eof || ctr < octr {
+		panic('chacha20: counter eof')
 	}
 
 	if ctr < c.counter {
-		c.lfo_kslen = int(c.counter - ctr) * block_size
+		c.kslen = int(c.counter - ctr) * chacha20.block_size
 	} else {
 		s.counter = ctr
-		s.lfo_kslen = 0
+		s.kslen = 0
 	}
 }
 
@@ -211,9 +160,9 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 	}
 	return error('wrong nonce size')
 }
-		
-// quarter_round is the basic operation of the ChaCha algorithm. It operates 
-// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate) 
+
+// quarter_round is the basic operation of the ChaCha algorithm. It operates
+// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate)
 // operation on this quartet u32 numbers.
 fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 	// The operation is as follows (in C-like notation):
@@ -222,7 +171,7 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 	// c += d; b ^= c; b <<<= 12;
 	// a += b; d ^= a; d <<<= 8;
 	// c += d; b ^= c; b <<<= 7;
-	
+
 	mut ax := a
 	mut bx := b
 	mut cx := c

@@ -1,32 +1,33 @@
 module chacha20
 
 import crypto.internal.subtle
-	
+
 // xor_key_stream fullfills `cipher.Stream` interface
 pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if src.len == 0 {
 		return
 	}
 	if dst.len < src.len {
-		panic("chacha20: dest smaller than src")
+		panic('chacha20: dest smaller than src')
 	}
 	dst = unsafe { dst[..src.len] }
 	if subtle.inexact_oerlap(dst, src) {
-		panic("chacha20: invalid buffer overlap")
+		panic('chacha20: invalid buffer overlap')
 	}
 
-	// First, drain any remaining key stream from a previous XORKeyStream.
+	// First, drain any remaining key stream from a previous xorkeystream.
 	if c.len_ks != 0 {
 		mut key_stream := c.buf[buf_size - sc.len_ks..]
 		if src.len < key_stream.len {
 			key_stream = unsafe { key_stream[..src.len] }
 		}
 		// bounds check elimination hint
-		_ = src[key_stream.len-1] 
-		// _ := cipher.xor_bytes(mut dst, block, key_stream)
-		for i, b in key_stream {
-			dst[i] = src[i] ^ b
-		}
+		_ = src[key_stream.len - 1]
+		n := cipher.xor_bytes(mut dst, src, key_stream)
+		assert n == key_stream.len
+		// for i, b in key_stream {
+		// 	dst[i] = src[i] ^ b
+		// }
 		s.len_ks -= key_stream.len
 		dst = unsafe { dst[key_stream.len..] }
 		src = unsafe { src[key_stream.len..] }
@@ -35,11 +36,16 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		return
 	}
 
-	num_blocks := (u64(src.len) + block_size - 1) / block_size
-	if c.overflow || u64(c.counter)+num_blocks > 1<<32 {
-		panic("chacha20: counter overflow")
-	} else if u64(c.counter)+num_blocks == 1<<32 {
-		c.overflow = true
+	// checks for counter overflow
+	// num_blocks := (u64(src.len) + block_size - 1) / block_size
+	mut num_blocks := src.len / block_size
+	if src.len % block_size != 0 {
+		num_blocks += 1
+	}
+	if c.eof || u64(c.counter) + num_blocks > 1 << 32 {
+		panic('chacha20: counter is eof')
+	} else if u64(c.counter) + num_blocks == 1 << 32 {
+		c.eof = true
 	}
 
 	full := src.len - src.len % buf_size
@@ -49,21 +55,20 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	dst = unsafe { dst[full..] }
 	src = unsafe { src[full..] }
 
-	// If using a multi-block xorKeyStreamBlocks would overflow, use the generic
+	// If using a multi-block xorKeyStreamBlocks would eof, use the generic
 	// one that does one block at a time.
 	blocks_perbuf := buf_size / block_size
-	if u64(c.counter)+blocks_perbuf > 1<<32 {
-		s.buf = []u8{len: buf_size}
-		num_blocks := (src.len + block_size - 1) / block_size
-		mut buf := c.buf[buf_size-num_blocks*block_size..]
+	if u64(c.counter) + blocks_perbuf > 1 << 32 {
+		c.buf = []u8{len: buf_size}
+		nr_blocks = (src.len + block_size - 1) / block_size
+		mut buf := c.buf[buf_size - nr_blocks * block_size..]
 		_ := copy(mut buf, src)
 		c.xor_key_stream_blocks(mut buf, buf)
 		c.len_ks = buf.len - copy(mut dst, buf)
 		return
 	}
 
-	// If we have a partial (multi-)block, pad it for xorKeyStreamBlocks, and
-	// keep the leftover keystream for the next XORKeyStream invocation.
+	// partial block
 	if src.len > 0 {
 		c.buf = []u8{len: buf_size}
 		copy(mut s.buf[..], src)
@@ -71,28 +76,28 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		c.len = buf_size - copy(mut dst, s.buf[..])
 	}
 }
-		
+
 // adapted from go version
 // reads a little endian u32 from src, XORs it with (a + b) and
 // places the result in little endian byte order in dst.
 fn axr(mut dst []u8, src []u8, a u32, b u32) {
 	// bounds check elimination hint
 	_ = src[3]
-	_ = dst[3] 
-	
+	_ = dst[3]
+
 	mut v := u32(src[0])
 	v |= u32(src[1]) << 8
 	v |= u32(src[2]) << 16
 	v |= u32(src[3]) << 24
 	v ^= (a + b)
-		
+
 	dst[0] = u8(v)
 	dst[1] = u8(v >> 8)
 	dst[2] = u8(v >> 16)
 	dst[3] = u8(v >> 24)
 }
-	
-fn  (mut c Cipher) xor_key_stream_blocks(mut dst []u8, src []u8) {
+
+fn (mut c Cipher) xor_key_stream_blocks(mut dst []u8, src []u8) {
 	c.chacha20_block_generic(mut dst, src)
 }
 
@@ -102,7 +107,6 @@ fn  (mut c Cipher) xor_key_stream_blocks(mut dst []u8, src []u8) {
 //         initial_state = state
 //         for i=1 upto 10
 //            inner_block(state)
-//            end
 //         state += initial_state
 //         return serialize(state)
 // where :
@@ -118,16 +122,16 @@ fn  (mut c Cipher) xor_key_stream_blocks(mut dst []u8, src []u8) {
 //
 fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	if dst.len != src.len || (dst.len % block_size) != 0 {
-		panic("chacha20 error: wrong dst and/or src length")
+		panic('chacha20 error: wrong dst and/or src length')
 	}
 
 	// initializes ChaCha20 state
-	c0, c1, c2, c3   := cc0, cc1, cc2, cc3
+	c0, c1, c2, c3 := cc0, cc1, cc2, cc3
 	c4 := binary.little_endian_u32(c.key[0..4])
 	c5 := binary.little_endian_u32(c.key[4..8])
 	c6 := binary.little_endian_u32(c.key[8..12])
 	c7 := binary.little_endian_u32(c.key[12..16])
-		
+
 	c8 := binary.little_endian_u32(c.key[16..20])
 	c9 := binary.little_endian_u32(c.key[20..24])
 	c10 := binary.little_endian_u32(c.key[24..28])
@@ -137,16 +141,15 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 	c13 := binary.little_endian_u32(c.nonce[0..4])
 	c14 := binary.little_endian_u32(c.nonce[4..8])
 	c15 := binary.little_endian_u32(c.nonce[8..12])
-         
-	
-	// The Go version, precomputes three first column round 
+
+	// The Go version, precomputes three first column round
 	// thats not depend on counter
-	// TODO: follow the Go version 
+	// TODO: follow the Go version
 	// precomputed three first column round.
 	p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
 	p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
 	p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
-	
+
 	for src.len >= 64 && dst.len >= 64 {
 		// remaining first column round
 		fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
@@ -174,22 +177,22 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 
 		// Add back the initial ChaCha20 state to generate the key stream, then
 		// XOR the key stream with the source and write out the result.
-		axr(mut dst[0:4], src[0:4], x0, c0)
-		axr(mut dst[4:8], src[4:8], x1, c1)
-		axr(mut dst[8:12], src[8:12], x2, c2)
-		axr(mut dst[12:16], src[12:16], x3, c3)
-		axr(mut dst[16:20], src[16:20], x4, c4)
-		axr(mut dst[20:24], src[20:24], x5, c5)
-		axr(mut dst[24:28], src[24:28], x6, c6)
-		axr(mut dst[28:32], src[28:32], x7, c7)
-		axr(mut dst[32:36], src[32:36], x8, c8)
-		axr(mut dst[36:40], src[36:40], x9, c9)
-		axr(mut dst[40:44], src[40:44], x10, c10)
-		axr(mut dst[44:48], src[44:48], x11, c11)
-		axr(mut dst[48:52], src[48:52], x12, c.counter)
-		axr(mut dst[52:56], src[52:56], x13, c13)
-		axr(mut dst[56:60], src[56:60], x14, c14)
-		axr(mut dst[60:64], src[60:64], x15, c15)
+		axr(mut dst[0..4], src[0..4], x0, c0)
+		axr(mut dst[4..8], src[4..8], x1, c1)
+		axr(mut dst[8..12], src[8..12], x2, c2)
+		axr(mut dst[12..16], src[12..16], x3, c3)
+		axr(mut dst[16..20], src[16..20], x4, c4)
+		axr(mut dst[20..24], src[20..24], x5, c5)
+		axr(mut dst[24..28], src[24..28], x6, c6)
+		axr(mut dst[28..32], src[28..32], x7, c7)
+		axr(mut dst[32..36], src[32..36], x8, c8)
+		axr(mut dst[36..40], src[36..40], x9, c9)
+		axr(mut dst[40..44], src[40..44], x10, c10)
+		axr(mut dst[44..48], src[44..48], x11, c11)
+		axr(mut dst[48..52], src[48..52], x12, c.counter)
+		axr(mut dst[52..56], src[52..56], x13, c13)
+		axr(mut dst[56..60], src[56..60], x14, c14)
+		axr(mut dst[60..64], src[60..64], x15, c15)
 
 		// updates ChaCha20 counter
 		c.counter += 1
@@ -198,4 +201,3 @@ fn (mut c Cipher) chacha20_block_generic(mut dst []u8, src []u8) {
 		dst = unsafe { dst[block_size..] }
 	}
 }
-	
