@@ -19,10 +19,9 @@ pub const nonce_size = 12
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size = 64
-const buf_size = block_size
 
 // vfmt off
-// first of four words ChaCha20 state constant
+// magic constant of first of four words of ChaCha20 state 
 const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
 const cc2 = u32(0x79622d32) // 2-by
@@ -37,12 +36,11 @@ struct Cipher {
 	key   [8]u32 // key_size of bytes length
 	nonce [3]u32 // (x)_nonce_size of bytes length
 mut:
-	counter    u32
-	overflow   bool
-	next_block int
+	counter  u32
+	overflow bool
 	// we follow the go version
-	precomp_done bool
-
+	precomp bool
+	//
 	p1  u32
 	p5  u32
 	p9  u32
@@ -88,24 +86,26 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	}
 
 	// bounds check elimination hint
-	keys = keys[..chacha20.key_size]
-	nonce = nonce[..chacha20.nonce_size]
+	_ = keys[chacha20.key_size - 1]
+	_ = nonce[chacha20.nonce_size - 1]
+	// keys = keys[..chacha20.key_size]
+	// nonce = nonce[..chacha20.nonce_size]
 
 	// setup key
 	mut k := [8]u32{}
-	k[0] = binary.little_endian_u23(keys[0..4])
-	k[1] = binary.little_endian_u23(keys[4..8])
-	k[2] = binary.little_endian_u23(keys[8..12])
-	k[3] = binary.little_endian_u23(keys[12..16])
-	k[4] = binary.little_endian_u23(keys[16..20])
-	k[5] = binary.little_endian_u23(keys[20..24])
-	k[6] = binary.little_endian_u23(keys[24..28])
-	k[7] = binary.little_endian_u23(keys[28..32])
+	k[0] = binary.little_endian_u32(keys[0..4])
+	k[1] = binary.little_endian_u32(keys[4..8])
+	k[2] = binary.little_endian_u32(keys[8..12])
+	k[3] = binary.little_endian_u32(keys[12..16])
+	k[4] = binary.little_endian_u32(keys[16..20])
+	k[5] = binary.little_endian_u32(keys[20..24])
+	k[6] = binary.little_endian_u32(keys[24..28])
+	k[7] = binary.little_endian_u32(keys[28..32])
 	// setup nonce
 	mut n := [3]u32{}
-	n[0] = binary.little_endian_u23(nonce[0..4])
-	n[1] = binary.little_endian_u23(nonce[4..8])
-	n[2] = binary.little_endian_u23(nonce[8..12])
+	n[0] = binary.little_endian_u32(nonce[0..4])
+	n[1] = binary.little_endian_u32(nonce[4..8])
+	n[2] = binary.little_endian_u32(nonce[8..12])
 
 	c := &Cipher{
 		key: k
@@ -116,9 +116,15 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 
 // make_block_generic_ref creates block stream from internal state
 // and stores it to dst
-fn (mut c Cipher) make_block_generic_ref() ![]u8 {
+fn (mut c Cipher) make_block_generic_ref() []u8 {
 	mut dst := []u8{len: chacha20.block_size}
 	// initializes ChaCha20 state
+	//      0:cccccccc   1:cccccccc   2:cccccccc   3:cccccccc
+	//      4:kkkkkkkk   5:kkkkkkkk   6:kkkkkkkk   7:kkkkkkkk
+	//      8:kkkkkkkk   9:kkkkkkkk  10:kkkkkkkk  11:kkkkkkkk
+	//     12:bbbbbbbb  13:nnnnnnnn  14:nnnnnnnn  15:nnnnnnnn
+	//
+	// where c=constant k=key b=blockcounter n=nonce
 	c0, c1, c2, c3 := chacha20.cc0, chacha20.cc1, chacha20.cc2, chacha20.cc3
 	c4 := c.key[0]
 	c5 := c.key[1]
@@ -135,20 +141,20 @@ fn (mut c Cipher) make_block_generic_ref() ![]u8 {
 	c15 := c.nonce[2]
 
 	// precomputes three first column round thats not depend on counter
-	if !c.precomp_done {
-		p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
-		p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
-		p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
-		c.precomp_done = true
+	if !c.precomp {
+		c.p1, c.p5, c.p9, c.p13 = quarter_round(c1, c5, c9, c13)
+		c.p2, c.p6, c.p10, c.p14 = quarter_round(c2, c6, c10, c14)
+		c.p3, c.p7, c.p11, c.p15 = quarter_round(c3, c7, c11, c15)
+		c.precomp = true
 	}
 	// remaining first column round
 	fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
 
 	// The second diagonal round.
-	mut x0, mut x5, mut x10, mut x15 := quarter_round(fcr0, p5, p10, p15)
-	mut x1, mut x6, mut x11, mut x12 := quarter_round(p1, p6, p11, fcr12)
-	mut x2, mut x7, mut x8, mut x13 := quarter_round(p2, p7, fcr8, p13)
-	mut x3, mut x4, mut x9, mut x14 := quarter_round(p3, fcr4, p9, p14)
+	mut x0, mut x5, mut x10, mut x15 := quarter_round(fcr0, c.p5, c.p10, c.p15)
+	mut x1, mut x6, mut x11, mut x12 := quarter_round(c.p1, c.p6, c.p11, fcr12)
+	mut x2, mut x7, mut x8, mut x13 := quarter_round(c.p2, c.p7, fcr8, c.p13)
+	mut x3, mut x4, mut x9, mut x14 := quarter_round(c.p3, fcr4, c.p9, c.p14)
 
 	// The remaining 18 rounds.
 	for i := 0; i < 9; i++ {
@@ -203,7 +209,7 @@ fn (mut c Cipher) make_block_generic_ref() ![]u8 {
 	return dst
 }
 
-fn (mut c Cipher) add_counter(n int) ! {
+fn (mut c Cipher) add_counter(n int) {
 	if c.overflow || u64(c.counter + n) > math.max_u32 {
 		panic('chacha20: counter would overflow')
 	} else if u64(c.counter + n) == math.max_u32 {
@@ -214,7 +220,6 @@ fn (mut c Cipher) add_counter(n int) ! {
 		c.counter += u32(n)
 		return
 	}
-	return error('bad n')
 }
 
 // encrypt fullfills cipher.Block.encrypt
@@ -228,7 +233,7 @@ fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
 	if subtle.inexact_overlap(dst, src) {
 		panic('chacha20: invalid buffer overlap')
 	}
-	dst = c.encrypt_generic_ref(src)!
+	dst = c.encrypt_generic_ref(src)
 }
 
 // key_stream fills stream with cryptographically secure pseudorandom bytes
@@ -238,7 +243,7 @@ fn (mut c Cipher) key_stream(stream []u8) {
 	c.encrypt(mut out, stream)
 }
 
-fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
+fn (mut c Cipher) encrypt_generic_ref(src []u8) []u8 {
 	// checks for counter overflow
 	num_blocks := src.len + chacha20.block_size - 1 / chacha20.block_size
 	if c.overflow || u64(c.counter + num_blocks) > 1 << 32 {
@@ -251,7 +256,7 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
 
 	for i := 0; i < src.len / chacha20.block_size; i++ {
 		// block_generic(key, counter + u32(i), nonce) or {
-		c.add_counter(i)!
+		c.add_counter(i)
 		key_stream := c.make_block_generic_ref() or { return error('chacha20: fail on key_stream') }
 		block := src[i * chacha20.block_size..(i + 1) * chacha20.block_size]
 
@@ -267,7 +272,7 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
 	if src.len % chacha20.block_size != 0 {
 		j := src.len / chacha20.block_size
 		// block_generic(key, counter + u32(j), nonce) or {
-		c.add_counter(j)!
+		c.add_counter(j)
 		key_stream := c.make_block_generic_ref() or {
 			return error('chacha20: encrypt_generic fail key_stream')
 		}
@@ -278,7 +283,7 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
 		n := cipher.xor_bytes(mut dst, block, key_stream)
 		assert n == key_stream.len
 
-		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
+		dst = unsafe { dst[0..src.len % chacha20.block_size] }
 
 		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
 		encrypted_message << dst
@@ -286,8 +291,21 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
 	return encrypted_message
 }
 
+// set_counter sets the Chacha20 Cipher counter
+pub fn (mut c Cipher) set_counter(ctr u32) {
+	// WARNING: maybe racy
+	if ctr == math.max_u32 {
+		c.overflow = true
+	}
+	if c.overflow || ctr > math.max_u32 {
+		panic('counter overflow')
+	}
+	c.counter = ctr
+}
+
+/*
 // encrypt_generic generates encrypted message from plaintext
-fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
+fn encrypt_generic_ref(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 	// bound early check
 	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
 	mut encrypted_message := []u8{}
@@ -323,18 +341,6 @@ fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 	return encrypted_message
 }
 
-// set_counter sets the Chacha20 Cipher counter
-pub fn (mut c Cipher) set_counter(ctr u32) {
-	// WARNING: maybe racy
-	if ctr == math.max_u32 {
-		c.overflow = true
-	}
-	if c.overflow || ctr > math.max_u32 {
-		return error('counter overflow')
-	}
-	c.counter = ctr
-}
-
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
 fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
@@ -349,6 +355,7 @@ fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	}
 	return error('Wrong nonce size : ${nonce.len}')
 }
+*/
 
 // otk_key_gen generates one time key using `chacha20` block function if provided
 // nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.

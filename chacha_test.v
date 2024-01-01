@@ -199,7 +199,7 @@ fn test_chacha20_encrypt() {
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
 		plaintext_bytes := hex.decode(c.plaintext) or { return }
-		encrypted_message := encrypt_generic(key_bytes, c.counter, nonce_bytes, plaintext_bytes) or {
+		encrypted_message := encrypt_generic_ref(key_bytes, c.counter, nonce_bytes, plaintext_bytes) or {
 			return
 		}
 
@@ -233,7 +233,7 @@ fn test_chacha20_cipher_encrypt() {
 		nonce_bytes := hex.decode(c.nonce) or { return }
 
 		plaintext_bytes := hex.decode(c.plaintext) or { return }
-		// := encrypt_generic(key_bytes, c.counter, nonce_bytes,
+		// := encrypt_generic_ref(key_bytes, c.counter, nonce_bytes,
 		//	plaintext_bytes) or { return }
 
 		mut ch := new_cipher(key_bytes, nonce_bytes) or { return }
