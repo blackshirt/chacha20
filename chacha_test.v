@@ -65,7 +65,7 @@ struct EncryptionCase {
 	output    string
 }
 
-const test_cases = [
+const c20_test_cases = [
 	// section 2.3.4 https://datatracker.ietf.org/doc/html/rfc8439#section-2.3.2
 	BlockCase{
 		key: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
@@ -163,7 +163,7 @@ fn test_quarter_round() {
 }
 
 fn test_chacha20_block_function() {
-	for c in chacha20.test_cases {
+	for c in chacha20.c20_test_cases {
 		key_bytes := hex.decode(c.key) or { return }
 		nonce_bytes := hex.decode(c.nonce) or { return }
 		block := block_generic(key_bytes, c.counter, nonce_bytes) or { return }

@@ -21,37 +21,42 @@ pub const x_nonce_size = 24
 const block_size = 64
 const buf_size = block_size
 
+// vfmt off
 // first of four words ChaCha20 state constant
 const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
 const cc2 = u32(0x79622d32) // 2-by
 const cc3 = u32(0x6b206574) // te k
+// vfmt on
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
 	block_size int = chacha20.block_size
-	key        []u8 // key_size of bytes length
-	nonce      []u8 // (x)_nonce_size of bytes length
+	// internal of ChaCha20 states is 16 of u32 word, 4 constant,
+	// 8 of key, 3 of nonce and 1 counter
+	key   [8]u32 // key_size of bytes length
+	nonce [3]u32 // (x)_nonce_size of bytes length
 mut:
-	counter u32
-	eof     bool
-	ksbuf   []u8 // buf_size bytes
-	kslen   int
-}
+	counter    u32
+	overflow   bool
+	next_block int
+	// we follow the go version
+	precomp_done bool
 
-fn (mut c Cipher) encrypt_generic(mut dst []u8, src []u8) {
-	unsafe {
-		mut dst_ := *dst
-
-		if dst_.len < src.len {
-			panic('chacha20: output smaller than input')
-		}
-		if subtle.inexact_overlap(dst[..src.len], src) {
-			panic('chacha20: invalid buffer overlap')
-		}
-		out := encrypt_generic(c.key, c.counter, c.nonce, src)! // []u8 {
-		copy(mut dst, out)
-	}
+	p1  u32
+	p5  u32
+	p9  u32
+	p13 u32
+	//
+	p2  u32
+	p6  u32
+	p10 u32
+	p14 u32
+	//
+	p3  u32
+	p7  u32
+	p11 u32
+	p15 u32
 }
 
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
@@ -73,8 +78,7 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 
 	if nonces.len == chacha20.x_nonce_size {
 		// XChaCha20 uses the ChaCha20 core to mix 16 bytes of the nonce into a
-		// derived key, allowing it to operate on a nonce of 24 bytes. See
-		// draft-irtf-cfrg-xchacha-01, Section 2.3.
+		// derived key, allowing it to operate on a nonce of 24 bytes.
 		keys = hchacha20(keys, nonces[0..16])
 		mut cnonce := []u8{len: chacha20.nonce_size}
 		copy(mut cnonce[4..12], nonces[16..24])
@@ -83,43 +87,252 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 		return error('chacha20: wrong nonce size')
 	}
 
+	// bounds check elimination hint
+	keys = keys[..chacha20.key_size]
+	nonce = nonce[..chacha20.nonce_size]
+
+	// setup key
+	mut k := [8]u32{}
+	k[0] = binary.little_endian_u23(keys[0..4])
+	k[1] = binary.little_endian_u23(keys[4..8])
+	k[2] = binary.little_endian_u23(keys[8..12])
+	k[3] = binary.little_endian_u23(keys[12..16])
+	k[4] = binary.little_endian_u23(keys[16..20])
+	k[5] = binary.little_endian_u23(keys[20..24])
+	k[6] = binary.little_endian_u23(keys[24..28])
+	k[7] = binary.little_endian_u23(keys[28..32])
+	// setup nonce
+	mut n := [3]u32{}
+	n[0] = binary.little_endian_u23(nonce[0..4])
+	n[1] = binary.little_endian_u23(nonce[4..8])
+	n[2] = binary.little_endian_u23(nonce[8..12])
+
 	c := &Cipher{
-		key: keys
-		nonce: nonces
+		key: k
+		nonce: n
 	}
 	return c
 }
 
-// encrypt encrypts plaintext with chacha20 stream cipher based on nonce size provided in cipher instance,
-// it's sizes was 12 bytes on standard ietf, constructed using standar chachar20 generic function,
-// otherwise the size was 24 bytes and constructed using extended xchacha20 mechanism using `hchacha20` function.
-//
-// This is provided as convenient mechanism to do some encryption on the some plaintext.
-pub fn (c Cipher) encrypt(plaintext []u8) ![]u8 {
-	return encrypt(c.key, c.counter, c.nonce, plaintext)
+// make_block_generic_ref creates block stream from internal state
+// and stores it to dst
+fn (mut c Cipher) make_block_generic_ref() ![]u8 {
+	mut dst := []u8{len: chacha20.block_size}
+	// initializes ChaCha20 state
+	c0, c1, c2, c3 := chacha20.cc0, chacha20.cc1, chacha20.cc2, chacha20.cc3
+	c4 := c.key[0]
+	c5 := c.key[1]
+	c6 := c.key[2]
+	c7 := c.key[3]
+	c8 := c.key[4]
+	c9 := c.key[5]
+	c10 := c.key[6]
+	c11 := c.key[7]
+
+	_ := c.counter
+	c13 := c.nonce[0]
+	c14 := c.nonce[1]
+	c15 := c.nonce[2]
+
+	// precomputes three first column round thats not depend on counter
+	if !c.precomp_done {
+		p1, p5, p9, p13 := quarter_round(c1, c5, c9, c13)
+		p2, p6, p10, p14 := quarter_round(c2, c6, c10, c14)
+		p3, p7, p11, p15 := quarter_round(c3, c7, c11, c15)
+		c.precomp_done = true
+	}
+	// remaining first column round
+	fcr0, fcr4, fcr8, fcr12 := quarter_round(c0, c4, c8, c.counter)
+
+	// The second diagonal round.
+	mut x0, mut x5, mut x10, mut x15 := quarter_round(fcr0, p5, p10, p15)
+	mut x1, mut x6, mut x11, mut x12 := quarter_round(p1, p6, p11, fcr12)
+	mut x2, mut x7, mut x8, mut x13 := quarter_round(p2, p7, fcr8, p13)
+	mut x3, mut x4, mut x9, mut x14 := quarter_round(p3, fcr4, p9, p14)
+
+	// The remaining 18 rounds.
+	for i := 0; i < 9; i++ {
+		// Column round.
+		x0, x4, x8, x12 = quarter_round(x0, x4, x8, x12)
+		x1, x5, x9, x13 = quarter_round(x1, x5, x9, x13)
+		x2, x6, x10, x14 = quarter_round(x2, x6, x10, x14)
+		x3, x7, x11, x15 = quarter_round(x3, x7, x11, x15)
+
+		// Diagonal round.
+		x0, x5, x10, x15 = quarter_round(x0, x5, x10, x15)
+		x1, x6, x11, x12 = quarter_round(x1, x6, x11, x12)
+		x2, x7, x8, x13 = quarter_round(x2, x7, x8, x13)
+		x3, x4, x9, x14 = quarter_round(x3, x4, x9, x14)
+	}
+
+	// add back to initial state and stores to dst
+	x0 += c0
+	binary.little_endian_put_u32(mut dst[0..4], x0)
+	x1 += c1
+	binary.little_endian_put_u32(mut dst[4..8], x1)
+	x2 += c2
+	binary.little_endian_put_u32(mut dst[8..12], x2)
+	x3 += c3
+	binary.little_endian_put_u32(mut dst[12..16], x3)
+	x4 += c4
+	binary.little_endian_put_u32(mut dst[16..20], x4)
+	x5 += c5
+	binary.little_endian_put_u32(mut dst[20..24], x5)
+	x6 += c6
+	binary.little_endian_put_u32(mut dst[24..28], x6)
+	x7 += c7
+	binary.little_endian_put_u32(mut dst[28..32], x7)
+	x8 += c8
+	binary.little_endian_put_u32(mut dst[32..36], x8)
+	x9 += c9
+	binary.little_endian_put_u32(mut dst[36..40], x9)
+	x10 += c10
+	binary.little_endian_put_u32(mut dst[40..44], x10)
+	x11 += c11
+	binary.little_endian_put_u32(mut dst[44..48], x11)
+	// x12 is c.counter
+	x12 += c.counter
+	binary.little_endian_put_u32(mut dst[48..52], x12)
+	x13 += c13
+	binary.little_endian_put_u32(mut dst[52..56], x13)
+	x14 += c14
+	binary.little_endian_put_u32(mut dst[56..60], x14)
+	x15 += c15
+	binary.little_endian_put_u32(mut dst[60..64], x15)
+
+	return dst
 }
 
-// decrypt decrypts ciphertext encrypted with ChaCha20 encryption function.
-// This doing thing in reverse way of encrypt.
-pub fn (c Cipher) decrypt(ciphertext []u8) ![]u8 {
-	return encrypt(c.key, c.counter, c.nonce, ciphertext)
+fn (mut c Cipher) add_counter(n int) ! {
+	if c.overflow || u64(c.counter + n) > math.max_u32 {
+		panic('chacha20: counter would overflow')
+	} else if u64(c.counter + n) == math.max_u32 {
+		c.overflow = true
+	}
+
+	if n >= 0 {
+		c.counter += u32(n)
+		return
+	}
+	return error('bad n')
+}
+
+// encrypt fullfills cipher.Block.encrypt
+fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
+	if src.len == 0 {
+		return
+	}
+	if dst.len < src.len {
+		panic('chacha20.Encrypt: insufficient space; dst is shorter than src.')
+	}
+	if subtle.inexact_overlap(dst, src) {
+		panic('chacha20: invalid buffer overlap')
+	}
+	dst = c.encrypt_generic_ref(src)!
+}
+
+// key_stream fills stream with cryptographically secure pseudorandom bytes
+// from c's keystream when a random key and nonce are used.
+fn (mut c Cipher) key_stream(stream []u8) {
+	mut out := []u8{len: stream.len}
+	c.encrypt(mut out, stream)
+}
+
+fn (mut c Cipher) encrypt_generic_ref(src []u8) ![]u8 {
+	// checks for counter overflow
+	num_blocks := src.len + chacha20.block_size - 1 / chacha20.block_size
+	if c.overflow || u64(c.counter + num_blocks) > 1 << 32 {
+		panic('chacha20: counter would overflow')
+	} else if u64(c.counter + num_blocks) == 1 << 32 {
+		c.overflow = true
+	}
+
+	mut encrypted_message := []u8{}
+
+	for i := 0; i < src.len / chacha20.block_size; i++ {
+		// block_generic(key, counter + u32(i), nonce) or {
+		c.add_counter(i)!
+		key_stream := c.make_block_generic_ref() or { return error('chacha20: fail on key_stream') }
+		block := src[i * chacha20.block_size..(i + 1) * chacha20.block_size]
+
+		// encrypted_message += block ^ key_stream
+		mut dst := []u8{len: block.len}
+		n := cipher.xor_bytes(mut dst, block, key_stream)
+		assert n == key_stream.len
+
+		// encrypted_message = encrypted_message + dst
+		encrypted_message << dst
+	}
+	// partial block
+	if src.len % chacha20.block_size != 0 {
+		j := src.len / chacha20.block_size
+		// block_generic(key, counter + u32(j), nonce) or {
+		c.add_counter(j)!
+		key_stream := c.make_block_generic_ref() or {
+			return error('chacha20: encrypt_generic fail key_stream')
+		}
+		block := src[j * chacha20.block_size..]
+
+		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
+		mut dst := []u8{len: block.len}
+		n := cipher.xor_bytes(mut dst, block, key_stream)
+		assert n == key_stream.len
+
+		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
+
+		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
+		encrypted_message << dst
+	}
+	return encrypted_message
+}
+
+// encrypt_generic generates encrypted message from plaintext
+fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
+	// bound early check
+	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
+	mut encrypted_message := []u8{}
+
+	for i := 0; i < plaintext.len / chacha20.block_size; i++ {
+		key_stream := block_generic(key, counter + u32(i), nonce) or {
+			return error('chacha20: encrypt_generic fail key_stream')
+		}
+		block := plaintext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
+
+		// encrypted_message += block ^ key_stream
+		mut dst := []u8{len: block.len}
+		_ := cipher.xor_bytes(mut dst, block, key_stream)
+
+		// encrypted_message = encrypted_message + dst
+		encrypted_message << dst
+	}
+	if plaintext.len % chacha20.block_size != 0 {
+		j := plaintext.len / chacha20.block_size
+		key_stream := block_generic(key, counter + u32(j), nonce) or {
+			return error('chacha20: encrypt_generic fail key_stream')
+		}
+		block := plaintext[j * chacha20.block_size..]
+
+		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
+		mut dst := []u8{len: block.len}
+		_ := cipher.xor_bytes(mut dst, block, key_stream)
+		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
+
+		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
+		encrypted_message << dst
+	}
+	return encrypted_message
 }
 
 // set_counter sets the Chacha20 Cipher counter
 pub fn (mut c Cipher) set_counter(ctr u32) {
 	// WARNING: maybe racy
-	// c.counter = ctr
-	octr := c.counter - u32(c.kslen / chacha20.block_size)
-	if c.eof || ctr < octr {
-		panic('chacha20: counter eof')
+	if ctr == math.max_u32 {
+		c.overflow = true
 	}
-
-	if ctr < c.counter {
-		c.kslen = int(c.counter - ctr) * chacha20.block_size
-	} else {
-		s.counter = ctr
-		s.kslen = 0
+	if c.overflow || ctr > math.max_u32 {
+		return error('counter overflow')
 	}
+	c.counter = ctr
 }
 
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
@@ -131,7 +344,7 @@ fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 		return ciphertext
 	}
 	if nonce.len == chacha20.nonce_size {
-		ciphertext := encrypt_generic(key, ctr, nonce, plaintext)!
+		ciphertext := encrypt_generic_ref(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
 	return error('Wrong nonce size : ${nonce.len}')
@@ -261,43 +474,6 @@ fn block_generic(key []u8, counter u32, nonce []u8) ![]u8 {
 
 	// return state
 	return serialize(cs)
-}
-
-// encrypt_generic generates encrypted message from plaintext
-fn encrypt_generic(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
-	// bound early check
-	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
-	mut encrypted_message := []u8{}
-
-	for i := 0; i < plaintext.len / chacha20.block_size; i++ {
-		key_stream := block_generic(key, counter + u32(i), nonce) or {
-			return error('chacha20: encrypt_generic fail key_stream')
-		}
-		block := plaintext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
-
-		// encrypted_message += block ^ key_stream
-		mut dst := []u8{len: block.len}
-		_ := cipher.xor_bytes(mut dst, block, key_stream)
-
-		// encrypted_message = encrypted_message + dst
-		encrypted_message << dst
-	}
-	if plaintext.len % chacha20.block_size != 0 {
-		j := plaintext.len / chacha20.block_size
-		key_stream := block_generic(key, counter + u32(j), nonce) or {
-			return error('chacha20: encrypt_generic fail key_stream')
-		}
-		block := plaintext[j * chacha20.block_size..]
-
-		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
-		mut dst := []u8{len: block.len}
-		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
-
-		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
-		encrypted_message << dst
-	}
-	return encrypted_message
 }
 
 // decrypt_generic decrypts the ciphertext, opposites of encryption process
