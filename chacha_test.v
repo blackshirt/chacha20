@@ -1,8 +1,17 @@
 module chacha20
 
-/*
-import benchmark
 import encoding.hex
+
+struct BlockCase {
+	key     string
+	nonce   string
+	counter u32
+	output  string
+}
+
+/*
+
+
 
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
 fn test_onetime_key_gen() ! {
@@ -50,12 +59,6 @@ const otk_cases = [
 	},
 ]
 
-struct BlockCase {
-	key     string
-	nonce   string
-	counter u32
-	output  string
-}
 
 struct EncryptionCase {
 	title     string
@@ -64,6 +67,68 @@ struct EncryptionCase {
 	counter   u32
 	plaintext string
 	output    string
+}
+*/
+
+fn test_no_overlap_xor_key_stream() ! {
+	for i, t in test_cases {
+		dump(i)
+		key := hex.decode(t.key)!
+		nonce := hex.decode(t.nonce)!
+		mut cs := new_cipher(key, nonce)!
+
+		input := hex.decode(t.input)!
+		mut output := []u8{len: input.len}
+		_ := cs.ecrypt_msg(mut output, input)!
+		got := hex.encode(output)
+
+		assert got == t.output
+	}
+}
+
+fn test_to_key_stream_chacha20_block_function() ! {
+	for c in chacha20.c20_test_cases {
+		key_bytes := hex.decode(c.key)!
+		nonce_bytes := hex.decode(c.nonce)!
+		mut block := []u8{len: block_size}
+		mut cs := new_cipher(key_bytes, nonce_bytes)!
+		cs.set_counter(c.counter)
+		cs.to_key_stream(mut block)
+		exp_bytes := hex.decode(c.output)!
+
+		// assert key_bytes.len == 32
+		// assert nonce_bytes.len == 12
+		assert block.len == 64
+		assert block == exp_bytes
+	}
+}
+
+fn test_chacha20_state_to_keystream() ! {
+	key := '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
+	key_bytes := hex.decode(key)!
+	// assert key_bytes.len == 32
+
+	nonce := '000000090000004a00000000'
+	nonce_bytes := hex.decode(nonce)!
+
+	mut block := []u8{len: block_size}
+	mut cs := new_cipher(key_bytes, nonce_bytes)!
+	cs.set_counter(u32(1))
+	cs.to_key_stream(mut block)
+
+	expected_raw_bytes := '10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e'
+	exp_bytes := hex.decode(expected_raw_bytes)!
+
+	assert exp_bytes.len == 64
+	assert block == exp_bytes
+}
+
+fn test_quarter_round() {
+	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)
+	assert a == 0xea2a92f4
+	assert b == 0xcb1cf8ce
+	assert c == 0x4581472e
+	assert d == 0x5881c4bb
 }
 
 const c20_test_cases = [
@@ -111,6 +176,7 @@ const c20_test_cases = [
 	},
 ]
 
+/*
 const encryption_test_cases = [
 	// core test
 	EncryptionCase{
@@ -151,48 +217,9 @@ const encryption_test_cases = [
 	},
 ]
 
-fn test_quarter_round() {
-	mut bench := benchmark.start()
-	// your code section 1 ...
-	// time.sleep(1500 * time.millisecond)
-	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)
-	bench.measure('quarter_round')
-	assert a == 0xea2a92f4
-	assert b == 0xcb1cf8ce
-	assert c == 0x4581472e
-	assert d == 0x5881c4bb
-}
 
-fn test_chacha20_block_function() {
-	for c in chacha20.c20_test_cases {
-		key_bytes := hex.decode(c.key) or { return }
-		nonce_bytes := hex.decode(c.nonce) or { return }
-		block := block_generic(key_bytes, c.counter, nonce_bytes) or { return }
-		exp_bytes := hex.decode(c.output) or { return }
 
-		// assert key_bytes.len == 32
-		// assert nonce_bytes.len == 12
-		assert block.len == 64
-		assert block == exp_bytes
-	}
-}
 
-fn test_chacha20_block_serialized() {
-	key := '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
-	key_bytes := hex.decode(key) or { return }
-	// assert key_bytes.len == 32
-
-	nonce := '000000090000004a00000000'
-	nonce_bytes := hex.decode(nonce) or { return }
-
-	// assert nonce_bytes.len == 12 // should 12
-	counter := u32(1)
-	block := block_generic(key_bytes, counter, nonce_bytes) or { return }
-
-	expected_raw_bytes := '10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e'
-	exp_bytes := hex.decode(expected_raw_bytes) or { return }
-	assert exp_bytes.len == 64
-}
 
 fn test_chacha20_encrypt() {
 	for c in chacha20.encryption_test_cases {

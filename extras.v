@@ -1,5 +1,7 @@
 module chacha20
 
+/*
+
 // key_stream fills stream with cryptographically secure pseudorandom bytes
 // from c's keystream when a random key and nonce are used.
 fn (mut c Cipher) key_stream(stream []u8) {
@@ -55,17 +57,7 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) []u8 {
 	return encrypted_message
 }
 
-// set_counter sets the Chacha20 Cipher counter
-pub fn (mut c Cipher) set_counter(ctr u32) {
-	// WARNING: maybe racy
-	if ctr == math.max_u32 {
-		c.overflow = true
-	}
-	if c.overflow || ctr > math.max_u32 {
-		panic('counter overflow')
-	}
-	c.counter = ctr
-}
+
 
 /*
 // encrypt_generic generates encrypted message from plaintext
@@ -143,41 +135,6 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 		return block[0..32]
 	}
 	return error('wrong nonce size')
-}
-
-// quarter_round is the basic operation of the ChaCha algorithm. It operates
-// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate)
-// operation on this quartet u32 numbers.
-fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
-	// The operation is as follows (in C-like notation):
-	// where `<<<=` denotes bits rotate left operation
-	// a += b; d ^= a; d <<<= 16;
-	// c += d; b ^= c; b <<<= 12;
-	// a += b; d ^= a; d <<<= 8;
-	// c += d; b ^= c; b <<<= 7;
-
-	mut ax := a
-	mut bx := b
-	mut cx := c
-	mut dx := d
-
-	ax += bx
-	dx ^= ax
-	dx = bits.rotate_left_32(dx, 16)
-
-	cx += dx
-	bx ^= cx
-	bx = bits.rotate_left_32(bx, 12)
-
-	ax += bx
-	dx ^= ax
-	dx = bits.rotate_left_32(dx, 8)
-
-	cx += dx
-	bx ^= cx
-	bx = bits.rotate_left_32(bx, 7)
-
-	return ax, bx, cx, dx
 }
 
 // initialize_state initializes ChaCha20 state, represented as array of [16]u32
@@ -316,3 +273,4 @@ fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
 	}
 	dst = c.encrypt_generic_ref(src)
 }
+*/

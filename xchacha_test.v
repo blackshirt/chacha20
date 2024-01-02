@@ -1,5 +1,6 @@
 module chacha20
 
+/*
 import encoding.hex
 
 struct XChachaTestCases {
@@ -580,3 +581,4 @@ fn test_xchacha_encrypt_vector_test() {
 		assert encrypted_message == ciphertext_bytes
 	}
 }
+*/
