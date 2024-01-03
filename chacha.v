@@ -11,6 +11,7 @@ import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
 
+// vfmt off
 // key_size is key size of ChaCha20 key (256 bits size), in bytes
 pub const key_size = 32
 // nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
@@ -19,7 +20,6 @@ pub const nonce_size = 12
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size = 64
-// vfmt off
 // magic constant of first of four words of ChaCha20 state 
 const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
