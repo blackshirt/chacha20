@@ -150,39 +150,41 @@ fn (mut c Cipher) public_xorkeystream(mut dst []u8, mut src []u8) {
 		panic('chacha20/chacha: dst buffer is to small')
 	}
 
-	if c.offset > 0 {
-		n := c.block[c.offset..].len
-		if src.len <= n {
-			for i, v in src {
-				dst[i] = v ^ c.block[c.offset]
-				c.offset += 1
-			}
-			if c.offset == chacha20.block_size {
-				c.offset = 0
-			}
-			return
-		}
+	mut encrypted_message := []u8{}
 
-		for i, v in c.block[c.offset..] {
-			dst[i] = src[i] ^ v
-		}
-		src = unsafe { src[n..] }
-		dst = unsafe { dst[n..] }
-		c.offset = 0
+	for i := 0; i < src.len / block_size; i++ {
+		// block_generic(key, counter + u32(i), nonce) or {
+		// current keystream was stored in c.block
+		c.make_generic_keystream() 
+		block := src[i * block_size..(i + 1) * block_size]
+
+		// encrypted_message += block ^ key_stream
+		mut out := []u8{len: block.len}
+		n := cipher.xor_bytes(mut out, block, c.block)
+		assert n == c.block.len
+
+		// encrypted_message = encrypted_message + dst
+		encrypted_message << out
 	}
+	// partial block
+	if src.len % block_size != 0 {
+		j := src.len / block_size
+		// block_generic(key, counter + u32(j), nonce) or {
+		c.make_generic_keystream() 
+		block := src[j * block_size..]
 
-	// check how many blocks would be xored, for counter overflow check.
-	mut tobe_xored := src.len / chacha20.block_size
-	if src.len % chacha20.block_size != 0 {
-		tobe_xored += 1
+		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
+		mut out := []u8{len: block.len}
+		n := cipher.xor_bytes(mut out, block, c.block)
+		assert n == block.len
+
+		out = unsafe { out[0..src.len % block_size] }
+
+		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
+		encrypted_message << dst
 	}
-
-	// if we reached limit, its would overflow the 1<<32 of counter's limit
-	if c.counter + tobe_xored >= math.max_u32 {
-		panic('chacha20/chacha: counter overflow')
-	}
-
-	c.offset += c.wrapped_xorkeystreamgeneric(mut dst, mut src)
+	n := copy(mut dst, encrpted_message) 
+	assert n == src.len 
 }
 
 fn (mut c Cipher) wrapped_xorkeystreamgeneric(mut dst []u8, mut src []u8) int {
@@ -210,7 +212,7 @@ fn (mut c Cipher) xorkeystreamgeneric(mut dst []u8, mut src []u8) int {
 	return n
 }
 
-// make_generic_keystream creates unoptimized generic ChaCha20 keystream block and stores the result in dst
+// make_generic_keystream creates unoptimized generic ChaCha20 keystream block and stores the result in c.block
 fn (mut c Cipher) make_generic_keystream() {
 	// initializes ChaCha20 state
 	//      0:cccccccc   1:cccccccc   2:cccccccc   3:cccccccc
