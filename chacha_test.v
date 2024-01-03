@@ -10,9 +10,6 @@ struct BlockCase {
 }
 
 /*
-
-
-
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
 fn test_onetime_key_gen() ! {
 	for i, v in chacha20.otk_cases {

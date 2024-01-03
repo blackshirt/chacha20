@@ -60,42 +60,6 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) []u8 {
 
 
 /*
-// encrypt_generic generates encrypted message from plaintext
-fn encrypt_generic_ref(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
-	// bound early check
-	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
-	mut encrypted_message := []u8{}
-
-	for i := 0; i < plaintext.len / chacha20.block_size; i++ {
-		key_stream := block_generic(key, counter + u32(i), nonce) or {
-			return error('chacha20: encrypt_generic fail key_stream')
-		}
-		block := plaintext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
-
-		// encrypted_message += block ^ key_stream
-		mut dst := []u8{len: block.len}
-		_ := cipher.xor_bytes(mut dst, block, key_stream)
-
-		// encrypted_message = encrypted_message + dst
-		encrypted_message << dst
-	}
-	if plaintext.len % chacha20.block_size != 0 {
-		j := plaintext.len / chacha20.block_size
-		key_stream := block_generic(key, counter + u32(j), nonce) or {
-			return error('chacha20: encrypt_generic fail key_stream')
-		}
-		block := plaintext[j * chacha20.block_size..]
-
-		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
-		mut dst := []u8{len: block.len}
-		_ := cipher.xor_bytes(mut dst, block, key_stream)
-		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
-
-		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
-		encrypted_message << dst
-	}
-	return encrypted_message
-}
 
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
@@ -202,6 +166,43 @@ fn block_generic(key []u8, counter u32, nonce []u8) ![]u8 {
 
 	// return state
 	return serialize(cs)
+}
+
+// encrypt_generic generates encrypted message from plaintext
+fn encrypt_generic_ref(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
+	// bound early check
+	_, _ = key[chacha20.key_size - 1], nonce[chacha20.nonce_size - 1]
+	mut encrypted_message := []u8{}
+
+	for i := 0; i < plaintext.len / chacha20.block_size; i++ {
+		// key_stream := block_generic(key, counter + u32(i), nonce) or {
+		// 	return error('chacha20: encrypt_generic fail key_stream')
+		// }
+		block := plaintext[i * chacha20.block_size..(i + 1) * chacha20.block_size]
+
+		// encrypted_message += block ^ key_stream
+		mut dst := []u8{len: block.len}
+		_ := cipher.xor_bytes(mut dst, block, key_stream)
+
+		// encrypted_message = encrypted_message + dst
+		encrypted_message << dst
+	}
+	if plaintext.len % chacha20.block_size != 0 {
+		j := plaintext.len / chacha20.block_size
+		key_stream := block_generic(key, counter + u32(j), nonce) or {
+			return error('chacha20: encrypt_generic fail key_stream')
+		}
+		block := plaintext[j * chacha20.block_size..]
+
+		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
+		mut dst := []u8{len: block.len}
+		_ := cipher.xor_bytes(mut dst, block, key_stream)
+		dst = unsafe { dst[0..plaintext.len % chacha20.block_size] }
+
+		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
+		encrypted_message << dst
+	}
+	return encrypted_message
 }
 
 // decrypt_generic decrypts the ciphertext, opposites of encryption process
