@@ -59,8 +59,6 @@ fn (mut c Cipher) encrypt_generic_ref(src []u8) []u8 {
 
 
 
-/*
-
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
 fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
@@ -75,31 +73,7 @@ fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	}
 	return error('Wrong nonce size : ${nonce.len}')
 }
-*/
 
-// otk_key_gen generates one time key using `chacha20` block function if provided
-// nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.
-// This function is intended to generate key for poly1305 mac.
-pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
-	_ = key[key_size - 1]
-	if nonce.len !in [nonce_size, x_nonce_size] {
-		return error('Bad nonce size')
-	}
-	// ensure nonce size is valid
-	counter := u32(0)
-	if nonce.len == x_nonce_size {
-		mut cnonce := nonce[16..].clone()
-		subkey := hchacha20(key, nonce[0..16])
-		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
-		block := block_generic(subkey, counter, cnonce)!
-		return block[0..32]
-	}
-	if nonce.len == nonce_size {
-		block := block_generic(key, counter, nonce)!
-		return block[0..32]
-	}
-	return error('wrong nonce size')
-}
 
 // initialize_state initializes ChaCha20 state, represented as array of [16]u32
 fn initialize_state(key []u8, counter u32, nonce []u8) ![]u32 {

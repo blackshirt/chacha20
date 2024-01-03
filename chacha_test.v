@@ -9,14 +9,13 @@ struct BlockCase {
 	output  string
 }
 
-/*
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
-fn test_onetime_key_gen() ! {
+fn test_chacha20_onetime_key_gen() ! {
 	for i, v in chacha20.otk_cases {
-		key := hex.decode(v.key) or { panic(err.msg()) }
-		nonce := hex.decode(v.nonce) or { panic(err.msg()) }
+		key := hex.decode(v.key)!
+		nonce := hex.decode(v.nonce)!
 
-		otk := hex.decode(v.otk) or { panic(err.msg()) }
+		otk := hex.decode(v.otk)!
 		out := otk_key_gen(key, nonce)!
 
 		assert out == otk
@@ -56,52 +55,38 @@ const otk_cases = [
 	},
 ]
 
-
-struct EncryptionCase {
-	title     string
-	key       string
-	nonce     string
-	counter   u32
-	plaintext string
-	output    string
-}
-*/
-
-fn test_no_overlap_xor_key_stream() ! {
-	for i, t in cc20_test_cases {
-		dump(i)
+fn test_chacha20_no_overlap_xor_key_stream() ! {
+	for i, t in xorkeystream_testcases {
 		key := hex.decode(t.key)!
 		nonce := hex.decode(t.nonce)!
 		mut cs := new_cipher(key, nonce)!
 
-		mut input := hex.decode(t.input)!
+		input := hex.decode(t.input)!
 		mut output := []u8{len: input.len}
-		cs.public_xorkeystream(mut output, mut input)
+		cs.xor_key_stream(mut output, input)
 		got := hex.encode(output)
 
 		assert got == t.output
 	}
 }
 
-/*
-fn test_to_key_stream_chacha20_block_function() ! {
-	for c in chacha20.c20_test_cases {
-		key_bytes := hex.decode(c.key)!
-		nonce_bytes := hex.decode(c.nonce)!
-		mut block := []u8{len: block_size}
+fn test_chacha20_block_function() ! {
+	for val in chacha20.blocks_testcases {
+		key_bytes := hex.decode(val.key)!
+		nonce_bytes := hex.decode(val.nonce)!
 		mut cs := new_cipher(key_bytes, nonce_bytes)!
-		cs.set_counter(c.counter)
-		cs.to_key_stream(mut block)
-		exp_bytes := hex.decode(c.output)!
+		cs.set_counter(val.counter)
+		cs.chacha20_block()
+		exp_bytes := hex.decode(val.output)!
 
 		// assert key_bytes.len == 32
 		// assert nonce_bytes.len == 12
-		assert block.len == 64
-		assert block == exp_bytes
+		assert cs.block.len == 64
+		assert cs.block == exp_bytes
 	}
 }
 
-fn test_chacha20_state_to_keystream() ! {
+fn test_chacha20_simple_block_function() ! {
 	key := '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
 	key_bytes := hex.decode(key)!
 	// assert key_bytes.len == 32
@@ -112,17 +97,16 @@ fn test_chacha20_state_to_keystream() ! {
 	mut block := []u8{len: block_size}
 	mut cs := new_cipher(key_bytes, nonce_bytes)!
 	cs.set_counter(u32(1))
-	cs.to_key_stream(mut block)
+	cs.chacha20_block()
 
 	expected_raw_bytes := '10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e'
 	exp_bytes := hex.decode(expected_raw_bytes)!
 
 	assert exp_bytes.len == 64
-	assert block == exp_bytes
+	assert cs.block == exp_bytes
 }
-*/
 
-fn test_quarter_round() {
+fn test_chacha20_quarter_round() {
 	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)
 	assert a == 0xea2a92f4
 	assert b == 0xcb1cf8ce
@@ -130,7 +114,7 @@ fn test_quarter_round() {
 	assert d == 0x5881c4bb
 }
 
-const c20_test_cases = [
+const blocks_testcases = [
 	// section 2.3.4 https://datatracker.ietf.org/doc/html/rfc8439#section-2.3.2
 	BlockCase{
 		key: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
@@ -175,7 +159,49 @@ const c20_test_cases = [
 	},
 ]
 
-/*
+struct EncryptionCase {
+	title     string
+	key       string
+	nonce     string
+	counter   u32
+	plaintext string
+	output    string
+}
+
+fn test_chacha20_cipher_encrypt() ! {
+	for c in chacha20.encryption_test_cases {
+		key_bytes := hex.decode(c.key)!
+		nonce_bytes := hex.decode(c.nonce)!
+		plaintext_bytes := hex.decode(c.plaintext)!
+
+		mut cs := new_cipher(key_bytes, nonce_bytes)!
+		cs.set_counter(c.counter)
+
+		mut output := []u8{len: plaintext_bytes.len}
+		cs.encrypt(mut output, plaintext_bytes)
+
+		expected := hex.decode(c.output)!
+		assert output == expected
+	}
+}
+
+fn test_chacha20_cipher_decrypt() ! {
+	for c in chacha20.encryption_test_cases {
+		key_bytes := hex.decode(c.key)!
+		nonce_bytes := hex.decode(c.nonce)!
+
+		ciphertext := hex.decode(c.output)!
+		mut cs := new_cipher(key_bytes, nonce_bytes)!
+		cs.set_counter(c.counter)
+
+		mut output := []u8{len: ciphertext.len}
+		cs.decrypt(mut output, ciphertext)
+
+		expected_decrypted_message := hex.decode(c.plaintext)!
+		assert output == expected_decrypted_message
+	}
+}
+
 const encryption_test_cases = [
 	// core test
 	EncryptionCase{
@@ -215,79 +241,3 @@ const encryption_test_cases = [
 		output: '62e6347f95ed87a45ffae7426f27a1df5fb69110044c0d73118effa95b01e5cf166d3df2d721caf9b21e5fb14c616871fd84c54f9d65b283196c7fe4f60553ebf39c6402c42234e32a356b3e764312a61a5532055716ead6962568f87d3f3f7704c6a8d1bcd1bf4d50d6154b6da731b187b58dfd728afa36757a797ac188d1'
 	},
 ]
-
-
-
-
-
-fn test_chacha20_encrypt() {
-	for c in chacha20.encryption_test_cases {
-		// println(c.title)
-		key_bytes := hex.decode(c.key) or { return }
-		nonce_bytes := hex.decode(c.nonce) or { return }
-		plaintext_bytes := hex.decode(c.plaintext) or { return }
-		encrypted_message := encrypt_generic_ref(key_bytes, c.counter, nonce_bytes, plaintext_bytes) or {
-			return
-		}
-
-		exp_bytes := hex.decode(c.output) or { return }
-		// assert key_bytes.len == 32
-		// assert nonce_bytes.len == 12
-		assert encrypted_message == exp_bytes
-	}
-}
-
-fn test_decrypt_generic() {
-	for c in chacha20.encryption_test_cases {
-		key_bytes := hex.decode(c.key) or { return }
-		nonce_bytes := hex.decode(c.nonce) or { return }
-
-		ciphertext := hex.decode(c.output) or { return }
-
-		output_plaintext := decrypt_generic(key_bytes, c.counter, nonce_bytes, ciphertext) or {
-			return
-		}
-
-		expected_decrypted_message := hex.decode(c.plaintext) or { return }
-		assert output_plaintext == expected_decrypted_message
-	}
-}
-
-fn test_chacha20_cipher_encrypt() {
-	for c in chacha20.encryption_test_cases {
-		// println(c.title)
-		key_bytes := hex.decode(c.key) or { return }
-		nonce_bytes := hex.decode(c.nonce) or { return }
-
-		plaintext_bytes := hex.decode(c.plaintext) or { return }
-		// := encrypt_generic_ref(key_bytes, c.counter, nonce_bytes,
-		//	plaintext_bytes) or { return }
-
-		mut ch := new_cipher(key_bytes, nonce_bytes) or { return }
-		ch.counter = c.counter
-		encrypted_message := ch.encrypt(plaintext_bytes) or { return }
-		exp_bytes := hex.decode(c.output) or { return }
-		// assert key_bytes.len == 32
-		// assert nonce_bytes.len == 12
-		// assert encrypted_message.len == exp_bytes.len
-		assert encrypted_message == exp_bytes
-	}
-}
-
-fn test_chacha20_cipher_decrypt() {
-	for c in chacha20.encryption_test_cases {
-		key_bytes := hex.decode(c.key) or { return }
-		nonce_bytes := hex.decode(c.nonce) or { return }
-
-		ciphertext := hex.decode(c.output) or { return }
-
-		mut ch := new_cipher(key_bytes, nonce_bytes) or { return }
-		ch.counter = c.counter
-
-		output_plaintext := ch.decrypt(ciphertext) or { return }
-
-		expected_decrypted_message := hex.decode(c.plaintext) or { return }
-		assert output_plaintext == expected_decrypted_message
-	}
-}
-*/
