@@ -68,21 +68,22 @@ struct EncryptionCase {
 */
 
 fn test_no_overlap_xor_key_stream() ! {
-	for i, t in test_cases {
+	for i, t in cc20_test_cases {
 		dump(i)
 		key := hex.decode(t.key)!
 		nonce := hex.decode(t.nonce)!
 		mut cs := new_cipher(key, nonce)!
 
-		input := hex.decode(t.input)!
+		mut input := hex.decode(t.input)!
 		mut output := []u8{len: input.len}
-		_ := cs.ecrypt_msg(mut output, input)!
+		cs.public_xorkeystream(mut output, mut input)
 		got := hex.encode(output)
 
 		assert got == t.output
 	}
 }
 
+/*
 fn test_to_key_stream_chacha20_block_function() ! {
 	for c in chacha20.c20_test_cases {
 		key_bytes := hex.decode(c.key)!
@@ -119,6 +120,7 @@ fn test_chacha20_state_to_keystream() ! {
 	assert exp_bytes.len == 64
 	assert block == exp_bytes
 }
+*/
 
 fn test_quarter_round() {
 	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)

@@ -7,7 +7,7 @@ struct TestCase {
 	output string
 }
 
-const test_cases = [
+const cc20_test_cases = [
 	TestCase{
 		// From libsodium/test/default/xchacha20.c
 		nonce: 'c047548266b7c370d33566a2425cbf30d82d1eaf5294109e'

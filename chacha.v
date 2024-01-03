@@ -37,7 +37,7 @@ struct Cipher {
 mut:
 	counter  u32
 	overflow bool
-	block    []u8 // block_size length 
+	block    []u8 = []u8{len: chacha20.block_size} // block_size length
 	offset   int
 	// we follow the go version
 	precomp bool
@@ -86,7 +86,7 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	// bounds check elimination hint
 	_ = keys[chacha20.key_size - 1]
 	_ = nonces[chacha20.nonce_size - 1]
-	
+
 	// setup key
 	mut k := [8]u32{}
 	k[0] = binary.little_endian_u32(keys[0..4])
@@ -145,19 +145,19 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 	return ax, bx, cx, dx
 }
 
-fn (mut c Cipher) public_xorkeystream(mut dst []u8, src []u8) {
+fn (mut c Cipher) public_xorkeystream(mut dst []u8, mut src []u8) {
 	if dst.len < src.len {
-		panic("chacha20/chacha: dst buffer is to small")
+		panic('chacha20/chacha: dst buffer is to small')
 	}
 
-	if c.offsett > 0 {
-		n := c.block[c.offset..].len 
+	if c.offset > 0 {
+		n := c.block[c.offset..].len
 		if src.len <= n {
 			for i, v in src {
 				dst[i] = v ^ c.block[c.offset]
 				c.offset += 1
 			}
-			if c.offset == block_size {
+			if c.offset == chacha20.block_size {
 				c.offset = 0
 			}
 			return
@@ -172,49 +172,46 @@ fn (mut c Cipher) public_xorkeystream(mut dst []u8, src []u8) {
 	}
 
 	// check how many blocks would be xored, for counter overflow check.
-	tobe_xored := src.len / block_size
-	if src.len % block_size != 0 {
+	mut tobe_xored := src.len / chacha20.block_size
+	if src.len % chacha20.block_size != 0 {
 		tobe_xored += 1
 	}
-	
-	// if we reached limit, its would overflow the 1<<32 of counter's limit 
+
+	// if we reached limit, its would overflow the 1<<32 of counter's limit
 	if c.counter + tobe_xored >= math.max_u32 {
-		panic("chacha20/chacha: counter overflow")
+		panic('chacha20/chacha: counter overflow')
 	}
-	
 
-	c.offset += c.xorkeystream_wrapper(mut dst, mut src, mut c.block)
+	c.offset += c.wrapped_xorkeystreamgeneric(mut dst, mut src)
 }
 
-fn (mut c Cipher) xorkeystream_wrapper(mut dst []u8, mut src []u8, mut block []u8) int {
-	return c.xorkeystreamgeneric(mut dst, mut src, mut blocks)
+fn (mut c Cipher) wrapped_xorkeystreamgeneric(mut dst []u8, mut src []u8) int {
+	return c.xorkeystreamgeneric(mut dst, mut src)
 }
 
-fn (mut c Cipher) xorkeystreamgeneric(mut dst []u8, mut src []u8, mut block []u8) int {
-	for src.len >= block_size {
-		c.key_stream_generic(mut block) // chachaGeneric(block, state, rounds)
+fn (mut c Cipher) xorkeystreamgeneric(mut dst []u8, mut src []u8) int {
+	for src.len >= chacha20.block_size {
+		c.make_generic_keystream() // chachaGeneric(block, state, rounds)
 
-		for i, v in block {
+		for i, v in c.block {
 			dst[i] = src[i] ^ v
 		}
-		src = unsafe { src[block_size..] }
-		dst = unsafe { dst[block_size..] }
+		src = unsafe { src[chacha20.block_size..] }
+		dst = unsafe { dst[chacha20.block_size..] }
 	}
 
 	n := src.len
 	if n > 0 {
-		c.key_stream_generic(mut block) // chachaGeneric(block, state, rounds)
+		c.make_generic_keystream() // chachaGeneric(block, state, rounds)
 		for i, v in src {
-			dst[i] = v ^ block[i]
+			dst[i] = v ^ c.block[i]
 		}
 	}
 	return n
 }
 
-
-// key_stream_generic creates unoptimized generic ChaCha20 keystream block and stores the result in dst
-fn (mut c Cipher) key_stream_generic(mut dst []u8) {
-	_ = dst[chacha20.block_size - 1]
+// make_generic_keystream creates unoptimized generic ChaCha20 keystream block and stores the result in dst
+fn (mut c Cipher) make_generic_keystream() {
 	// initializes ChaCha20 state
 	//      0:cccccccc   1:cccccccc   2:cccccccc   3:cccccccc
 	//      4:kkkkkkkk   5:kkkkkkkk   6:kkkkkkkk   7:kkkkkkkk
@@ -292,26 +289,25 @@ fn (mut c Cipher) key_stream_generic(mut dst []u8) {
 	if ctr == math.max_u32 {
 		c.overflow = true
 	}
-	if overflow || ctr > math.max_u32 {
-		panic("counter overflow")
+	if c.overflow || ctr > math.max_u32 {
+		panic('counter overflow')
 	}
-	c.counter += 1 
-	
-	binary.little_endian_put_u32(mut dst[0..4], x0)
-	binary.little_endian_put_u32(mut dst[4..8], x1)
-	binary.little_endian_put_u32(mut dst[8..12], x2)
-	binary.little_endian_put_u32(mut dst[12..16], x3)
-	binary.little_endian_put_u32(mut dst[16..20], x4)
-	binary.little_endian_put_u32(mut dst[20..24], x5)
-	binary.little_endian_put_u32(mut dst[24..28], x6)
-	binary.little_endian_put_u32(mut dst[28..32], x7)
-	binary.little_endian_put_u32(mut dst[32..36], x8)
-	binary.little_endian_put_u32(mut dst[36..40], x9)
-	binary.little_endian_put_u32(mut dst[40..44], x10)
-	binary.little_endian_put_u32(mut dst[44..48], x11)
-	binary.little_endian_put_u32(mut dst[48..52], x12)
-	binary.little_endian_put_u32(mut dst[52..56], x13)
-	binary.little_endian_put_u32(mut dst[56..60], x14)
-	binary.little_endian_put_u32(mut dst[60..64], x15)
-}
+	c.counter += 1
 
+	binary.little_endian_put_u32(mut c.block[0..4], x0)
+	binary.little_endian_put_u32(mut c.block[4..8], x1)
+	binary.little_endian_put_u32(mut c.block[8..12], x2)
+	binary.little_endian_put_u32(mut c.block[12..16], x3)
+	binary.little_endian_put_u32(mut c.block[16..20], x4)
+	binary.little_endian_put_u32(mut c.block[20..24], x5)
+	binary.little_endian_put_u32(mut c.block[24..28], x6)
+	binary.little_endian_put_u32(mut c.block[28..32], x7)
+	binary.little_endian_put_u32(mut c.block[32..36], x8)
+	binary.little_endian_put_u32(mut c.block[36..40], x9)
+	binary.little_endian_put_u32(mut c.block[40..44], x10)
+	binary.little_endian_put_u32(mut c.block[44..48], x11)
+	binary.little_endian_put_u32(mut c.block[48..52], x12)
+	binary.little_endian_put_u32(mut c.block[52..56], x13)
+	binary.little_endian_put_u32(mut c.block[56..60], x14)
+	binary.little_endian_put_u32(mut c.block[60..64], x15)
+}
