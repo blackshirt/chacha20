@@ -21,7 +21,7 @@ Note that ChaCha20, like all stream ciphers, is not authenticated and allows att
 ```v
 const key_size = 32
 ```
-vfmt off key_size is key size of ChaCha20 key (256 bits size), in bytes
+key_size is key size of ChaCha20 key (256 bits size), in bytes
 
 [[Return to contents]](#Contents)
 
