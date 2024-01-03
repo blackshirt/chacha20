@@ -9,6 +9,7 @@ tls13
 
 # Ignore binary output folders
 bin/
+_docs/
 
 # Ignore common editor/system specific metadata
 .DS_Store

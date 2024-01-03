@@ -63,7 +63,6 @@ fn hchacha20(key []u8, nonce []u8) []u8 {
 	return out
 }
 
-/*
 // eXtended nonce size (xchacha20) encrypt function
 // as specified in https://datatracker.ietf.org/doc/html/draft-arciszewski-xchacha-03
 fn encrypt_extended(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
@@ -78,4 +77,3 @@ fn encrypt_extended(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 
 	return ciphertext
 }
-*/

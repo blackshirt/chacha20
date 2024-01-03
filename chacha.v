@@ -29,6 +29,7 @@ const cc3 = u32(0x6b206574) // te k
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
+pub:
 	block_size int = chacha20.block_size
 	// internal of ChaCha20 states is 16 of u32 words, 4 constants,
 	// 8 word of keys, 3 word of nonces and 1 word of counter
@@ -109,7 +110,7 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 }
 
 // set_counter sets Cipher's counter
-fn (mut c Cipher) set_counter(ctr u32) {
+pub fn (mut c Cipher) set_counter(ctr u32) {
 	if ctr == math.max_u32 {
 		c.overflow = true
 	}
@@ -155,19 +156,19 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 }
 
 // encrypt fullfills `cipher.Block.encrypt` interface.
-fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
+pub fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
 // encrypt fullfills `cipher.Block.decrypt` interface.
-fn (mut c Cipher) decrypt(mut dst []u8, src []u8) {
+pub fn (mut c Cipher) decrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
 // xor_key_stream fullfills `cipher.Stream` interface. Internally, its encrypts plaintext message
 // in src and stores ciphertext result in dst. Its not fully compliant with the interface in the manner
 // its run in single run of encryption.
-fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
+pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if src.len == 0 {
 		return
 	}

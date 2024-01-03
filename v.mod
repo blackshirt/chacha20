@@ -1,7 +1,7 @@
 Module {
 	name: 'chacha20'
-	description: 'Chacha20 in pure V'
+	description: 'Chacha20 stream cipher in pure V'
 	version: ''
-	license: ''
+	license: 'MIT'
 	dependencies: []
 }
