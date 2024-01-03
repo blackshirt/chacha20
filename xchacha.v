@@ -10,7 +10,8 @@ import encoding.binary
 // except hchacha20 use a 128-bit (16 byte) nonce and has no counter to derive subkey
 fn hchacha20(key []u8, nonce []u8) []u8 {
 	// early bound check
-	_, _ = key[..key_size], nonce[..16]
+	_ = key[key_size - 1]
+	_ = nonce[15]
 
 	mut x0 := cc0
 	mut x1 := cc1
@@ -27,6 +28,7 @@ fn hchacha20(key []u8, nonce []u8) []u8 {
 	mut x10 := binary.little_endian_u32(key[24..28])
 	mut x11 := binary.little_endian_u32(key[28..32])
 
+	// we have no counter
 	mut x12 := binary.little_endian_u32(nonce[0..4])
 	mut x13 := binary.little_endian_u32(nonce[4..8])
 	mut x14 := binary.little_endian_u32(nonce[8..12])
@@ -71,7 +73,7 @@ fn encrypt_extended(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	mut cnonce := nonce[16..24].clone()
 
 	cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
-	ciphertext := encrypt_generic(subkey, ctr, cnonce, plaintext)!
+	ciphertext := encrypt_generic_ref(subkey, ctr, cnonce, plaintext)!
 
 	return ciphertext
 }
