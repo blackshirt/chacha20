@@ -21,21 +21,21 @@ Note that ChaCha20, like all stream ciphers, is not authenticated and allows att
 ```v
 const key_size = 32
 ```
-key_size is key size of ChaCha20 key (256 bits size), in bytes
+key_size is the size of ChaCha20 key (256 bits size), in bytes
 
 [[Return to contents]](#Contents)
 
 ```v
 const nonce_size = 12
 ```
-nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
+nonce_size is the size of original ChaCha20 nonce (96 bits size), in bytes
 
 [[Return to contents]](#Contents)
 
 ```v
 const x_nonce_size = 24
 ```
-extended nonce size of chacha20, called xchacha20, 192 bits nonce size
+The size of extended ChaCha20 nonce bytes, called xchacha20, 192 bits size
 
 [[Return to contents]](#Contents)
 
