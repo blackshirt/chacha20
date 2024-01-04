@@ -11,11 +11,11 @@ import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
 
-// key_size is key size of ChaCha20 key (256 bits size), in bytes
+// size of ChaCha20 key, ie 256 bits size, in bytes
 pub const key_size = 32
-// nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
+// size of ietf ChaCha20 nonce, ie 96 bits size, in bytes
 pub const nonce_size = 12
-// extended nonce size of chacha20, called xchacha20, 192 bits nonce size
+// size of extended ChaCha20 nonce, called XChaCha20, 192 bits
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size = 64
@@ -33,15 +33,15 @@ struct Cipher {
 pub:
 	block_size int = chacha20.block_size
 mut:
-	// internal's of ChaCha20 state, ie, 16 of u32 words, 4 of ChaCha20 constants,
+	// internal's of ChaCha20 states, ie, 16 of u32 words, 4 of ChaCha20 constants,
 	// 8 word (32 bytes) of keys, 3 word (24 bytes) of nonces and 1 word of counter
-	key      [8]u32 // key_size of bytes length
-	nonce    [3]u32 // (x)_nonce_size of bytes length
+	key      [8]u32  
+	nonce    [3]u32  
 	counter  u32
 	overflow bool
-	// internal block_size length buffer for storing block stream results
+	// internal buffer for storing block stream results
 	block []u8 = []u8{len: chacha20.block_size}
-	// we follow the go version
+	// additional flags, follow the go version
 	precomp bool
 	p1  u32 p5  u32 p9  u32 p13 u32
 	p2  u32 p6  u32 p10 u32 p14 u32
@@ -49,7 +49,8 @@ mut:
 }
 // vfmt on
 	
-// new_random_cipher creates new ChaCha20 cipher with random key and random nonce
+// new_random_cipher creates new ChaCha20 cipher instance with random key and random nonce 
+// obtained from `crypto.rand`.
 // Its accepts `xnonce` flag thats driving the supported size of the nonce, 12 or 24.
 pub fn new_random_cipher(xnonce bool) !&Cipher {
 	key := rand.read(chacha20.key_size)!
@@ -63,7 +64,6 @@ pub fn new_random_cipher(xnonce bool) !&Cipher {
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
-// This is the only exported function to create initialized Cipher instances.
 pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	mut c := &Cipher{}
 	// we dont need reset on new cipher instance
@@ -79,15 +79,11 @@ pub fn (mut c Cipher) free() {
 		return
 	}
 	unsafe {
-		// c.key.free() // fixed arrays does not support free
-		// c.nonce.free()
-		c.block.free()
 		free(c)
 	}
 }
 
-// reset quickly sets the bytes of all elements of the array to 0
-// and reset all fields to default value
+// reset quickly sets all Cipher's fields to default value
 @[unsafe]
 pub fn (mut c Cipher) reset() {
 	for i, _ in c.key {
@@ -131,17 +127,19 @@ pub fn (mut c Cipher) set_counter(ctr u32) {
 	c.counter = ctr
 }
 
-// encrypt fullfills `cipher.Block.encrypt` interface.
+// encrypt encrypts plaintext in src bytes and stores ciphertext result in dst.
+// Its fullfills `cipher.Block.encrypt` interface.
 pub fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
-// encrypt fullfills `cipher.Block.decrypt` interface.
+// decrypt does reverse of .encrypt() operation, decrypts ciphertext in src, and stores the result in dst.
+// decrypt fullfills `cipher.Block.decrypt` interface.
 pub fn (mut c Cipher) decrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
-// xor_key_stream xors each byte in the given slice with a byte from the
+// xor_key_stream xors each byte in the given slice in the src with a byte from the
 // cipher's key stream. It fullfills `cipher.Stream` interface. Its does encrypts plaintext message
 // in src and stores ciphertext result in dst in single shot of run of encryption.
 pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
@@ -287,7 +285,7 @@ fn (mut c Cipher) chacha20_block() {
 	binary.little_endian_put_u32(mut c.block[60..64], x15)
 }
 
-// generic_key_stream creates unoptimized generic ChaCha20 keystream block and stores the result in Cipher.block
+// generic_key_stream creates generic ChaCha20 keystream block and stores the result in Cipher.block
 fn (mut c Cipher) generic_key_stream() {
 	// creates ChaCha20 block stream
 	c.chacha20_block()
