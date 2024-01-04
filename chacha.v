@@ -27,7 +27,6 @@ const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
 const cc2 = u32(0x79622d32) // 2-by
 const cc3 = u32(0x6b206574) // te k
-// vfmt on
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
@@ -44,23 +43,12 @@ mut:
 	block []u8 = []u8{len: chacha20.block_size}
 	// we follow the go version
 	precomp bool
-	//
-	p1  u32
-	p5  u32
-	p9  u32
-	p13 u32
-	//
-	p2  u32
-	p6  u32
-	p10 u32
-	p14 u32
-	//
-	p3  u32
-	p7  u32
-	p11 u32
-	p15 u32
+	p1  u32 p5  u32 p9  u32 p13 u32
+	p2  u32 p6  u32 p10 u32 p14 u32
+	p3  u32 p7  u32 p11 u32 p15 u32
 }
-
+// vfmt on
+	
 // new_random_cipher creates new ChaCha20 cipher with random key and random nonce
 // Its accepts `xnonce` flag thats driving the supported size of the nonce, 12 or 24.
 pub fn new_random_cipher(xnonce bool) !&Cipher {
