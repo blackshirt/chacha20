@@ -77,11 +77,12 @@ pub fn new_random_cipher(xnonce bool) !&Cipher {
 // will be used. It returns an error if key or nonce have any other length.
 // This is the only exported function to create initialized Cipher instances.
 pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
+	// check for correct key and nonce length
 	if key.len != chacha20.key_size {
 		return error('chacha20: bad key size provided ')
 	}
-
-	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
+	// check for nonce's length is 12 or 24
+	if nonce.len != chacha20.nonce_size && nonce.len !=  chacha20.x_nonce_size {
 		return error('chacha20: Bad nonce size provided')
 	}
 	mut nonces := unsafe { nonce[..] }
@@ -122,7 +123,7 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	return c
 }
 
-// free the resources taken by the Cipher `c`
+// free the resources taken by the Cipher `c`. Dont use cipher after .free call
 @[unsafe]
 pub fn (mut c Cipher) free() {
 	$if prealloc {
@@ -132,6 +133,7 @@ pub fn (mut c Cipher) free() {
 		// c.key.free() // fixed arrays does not support free
 		// c.nonce.free()
 		c.block.free()
+		free(c)
 	}
 }
 
