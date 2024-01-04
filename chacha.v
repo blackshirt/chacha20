@@ -141,9 +141,9 @@ pub fn (mut c Cipher) decrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
-// xor_key_stream fullfills `cipher.Stream` interface. Internally, its encrypts plaintext message
-// in src and stores ciphertext result in dst. Its not fully compliant with the interface in the manner
-// its run in single run of encryption.
+// xor_key_stream xors each byte in the given slice with a byte from the
+// cipher's key stream. It fullfills `cipher.Stream` interface. Its does encrypts plaintext message
+// in src and stores ciphertext result in dst in single shot of run of encryption.
 pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if src.len == 0 {
 		return
@@ -158,33 +158,34 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 
 	// process for multiple blocks
 	for i := 0; i < src.len / chacha20.block_size; i++ {
-		// current keystream was stored in c.block
+		// generates ciphers keystream and stored in c.block
 		c.generic_key_stream()
+		// get current's input block to be xor-ed
 		block := unsafe { src[i * chacha20.block_size..(i + 1) * chacha20.block_size] }
 
-		// ciphertext += block ^ key_stream
+		// xor-ing current block of plaintext with keystream in c.block and stores result in out
 		mut out := []u8{len: block.len}
 		n := cipher.xor_bytes(mut out, block, c.block)
 		assert n == c.block.len
 
-		// ciphertext = ciphertext + dst
+		// append current output to the ciphertext buffer
 		ciphertext << out
 	}
-	// partial block
+	// process for partial block
 	if src.len % chacha20.block_size != 0 {
 		j := src.len / chacha20.block_size
-		// block_generic(key, counter + u32(j), nonce) or {
 		c.generic_key_stream()
+		// gets the remaining partial block
 		block := unsafe { src[j * chacha20.block_size..] }
-
-		// ciphertext += (block^key_stream)[0..len(plaintext)%block_size]
+		// xor-ing block with keystream
 		mut out := []u8{len: block.len}
 		n := cipher.xor_bytes(mut out, block, c.block)
 		assert n == block.len
 
+		// we make sure, takes only required remaining bytes
 		out = unsafe { out[0..src.len % chacha20.block_size] }
 
-		// ciphertext = ciphertext[0..plaintext.len % block_size]
+		// append last output to the ciphertext buffer
 		ciphertext << out
 	}
 	// copy ciphertext message results to the dst buffer
