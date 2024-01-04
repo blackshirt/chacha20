@@ -32,13 +32,13 @@ const cc3 = u32(0x6b206574) // te k
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
+pub:
+	block_size int = chacha20.block_size
 mut:
 	// internal's of ChaCha20 state, ie, 16 of u32 words, 4 of ChaCha20 constants,
 	// 8 word (32 bytes) of keys, 3 word (24 bytes) of nonces and 1 word of counter
 	key   [8]u32 // key_size of bytes length
 	nonce [3]u32 // (x)_nonce_size of bytes length
-pub:
-	block_size int = chacha20.block_size
 	counter  u32
 	overflow bool
 	// internal block_size length buffer for storing block stream results
