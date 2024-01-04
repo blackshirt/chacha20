@@ -1,8 +1,44 @@
 module chacha20
 
+import math.bits
 import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
+
+// quarter_round is the basic operation of the ChaCha algorithm. It operates
+// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate)
+// operation on this quartet u32 numbers.
+fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
+	// The operation is as follows (in C-like notation):
+	// where `<<<=` denotes bits rotate left operation
+	// a += b; d ^= a; d <<<= 16;
+	// c += d; b ^= c; b <<<= 12;
+	// a += b; d ^= a; d <<<= 8;
+	// c += d; b ^= c; b <<<= 7;
+
+	mut ax := a
+	mut bx := b
+	mut cx := c
+	mut dx := d
+
+	ax += bx
+	dx ^= ax
+	dx = bits.rotate_left_32(dx, 16)
+
+	cx += dx
+	bx ^= cx
+	bx = bits.rotate_left_32(bx, 12)
+
+	ax += bx
+	dx ^= ax
+	dx = bits.rotate_left_32(dx, 8)
+
+	cx += dx
+	bx ^= cx
+	bx = bits.rotate_left_32(bx, 7)
+
+	return ax, bx, cx, dx
+}
 
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
