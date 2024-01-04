@@ -32,13 +32,13 @@ const cc3 = u32(0x6b206574) // te k
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
+mut:
 	// internal's of ChaCha20 state, ie, 16 of u32 words, 4 of ChaCha20 constants,
 	// 8 word (32 bytes) of keys, 3 word (24 bytes) of nonces and 1 word of counter
 	key   [8]u32 // key_size of bytes length
 	nonce [3]u32 // (x)_nonce_size of bytes length
 pub:
 	block_size int = chacha20.block_size
-mut:
 	counter  u32
 	overflow bool
 	// internal block_size length buffer for storing block stream results
@@ -123,6 +123,48 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	return c
 }
 
+// free the resources taken by the Cipher `c`
+@[unsafe]
+pub fn (mut c Cipher) free() {
+	$if prealloc {
+		return
+	}
+	unsafe { 
+		c.key.free()
+		c.nonce.free()
+		c.block.free()
+	}
+}
+
+// reset quickly sets the bytes of all elements of the array to 0
+// and reset all fields to default value
+@[unsafe]
+pub fn (mut c Cipher) reset() {
+	unsafe { 
+		c.key.reset()
+		c.nonce.reset()
+		c.block.reset()
+	}
+	c.counter = u32(0)
+	c.overflow = false
+	c.precomp = false
+	//
+	c.p1  = u32(0)
+	c.p5  = u32(0)
+	c.p9  = u32(0)
+	c.p13 = u32(0)
+	//
+	c.p2  = u32(0)
+	c.p6  = u32(0)
+	c.p10 = u32(0)
+	c.p14 = u32(0)
+	//
+	c.p3  = u32(0)
+	c.p7  = u32(0)
+	c.p11 = u32(0)
+	c.p15 = u32(0)
+}
+		
 // set_counter sets Cipher's counter
 pub fn (mut c Cipher) set_counter(ctr u32) {
 	if ctr == math.max_u32 {
