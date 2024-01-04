@@ -7,6 +7,7 @@ module chacha20
 
 import math
 import math.bits
+import crypto.rand
 import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
@@ -60,7 +61,18 @@ mut:
 	p11 u32
 	p15 u32
 }
+	
+// new_random_cipher creates new ChaCha20 cipher with random key and random nonce
+// Its accepts `xnonce` flag thats driving the supported size of the nonce, 12 or 24.
+pub fn new_random_cipher(xnonce bool) !&Cipher {
+	key := rand.read(key_size)!
+	size := if xnonce { x_nonce_size } else { nonce_size }
+	nonce := rand.read(size)!
 
+	c := new_cipher(key, nonce)!
+	return c
+}
+	
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
