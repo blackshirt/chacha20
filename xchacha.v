@@ -6,19 +6,19 @@ import encoding.binary
 // Its based on https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha-03
 // Note: so, its maybe outdated...
 
-// HChaCha20 nonce size 
-const h_nonce_size = 16 
+// HChaCha20 nonce size
+const h_nonce_size = 16
 
 // hchacha20 are intermediary step to build xchacha20 and initialized the same way as the ChaCha20 cipher,
 // except hchacha20 use a 128-bit (16 byte) nonce and has no counter to derive subkey
 // see https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha-03#section-2.2
 fn hchacha20(key []u8, nonce []u8) ![]u8 {
 	// early bound check
-	if key.len != chacha20.key_size {
-		return error("xchacha: Bad key size")
+	if key.len != key_size {
+		return error('xchacha: Bad key size')
 	}
 	if nonce.len != chacha20.h_nonce_size {
-		return error("xchacha: Bad nonce size")
+		return error('xchacha: Bad nonce size')
 	}
 	// initializes ChaCha20 state
 	mut x0 := cc0
@@ -56,10 +56,10 @@ fn hchacha20(key []u8, nonce []u8) ![]u8 {
 		x2, x7, x8, x13 = quarter_round(x2, x7, x8, x13)
 		x3, x4, x9, x14 = quarter_round(x3, x4, x9, x14)
 	}
-	
+
 	// Once the 20 ChaCha rounds have been completed, the first 128 bits (16 bytes) and
-    // last 128 bits (16 bytes) of the ChaCha state (both little-endian) are
-    // concatenated, and this 256-bit (32 bytes) subkey is returned.
+	// last 128 bits (16 bytes) of the ChaCha state (both little-endian) are
+	// concatenated, and this 256-bit (32 bytes) subkey is returned.
 	mut out := []u8{len: 32}
 	binary.little_endian_put_u32(mut out[0..4], x0)
 	binary.little_endian_put_u32(mut out[4..8], x1)
@@ -76,19 +76,19 @@ fn hchacha20(key []u8, nonce []u8) ![]u8 {
 
 // eXtended ChaCha20 (XChaCha20) encrypt function
 // see https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha-03#section-2.3.1
-fn xchacha20_encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
-	if nonce.len != x_nonce_size {
-		return error('xchacha: wrong nonce size')
-	}
-	subkey := hchacha20(key, nonce[0..16])
+fn xchacha20_encrypt(key []u8, nonce []u8, plaintext []u8) ![]u8 {
+	return xchacha20_encrypt_with_counter(key, nonce, u32(0), plaintext)
+}
+
+fn xchacha20_encrypt_with_counter(key []u8, nonce []u8, ctr u32, plaintext []u8) ![]u8 {
+	// bound check elimination
+	_ = nonce[x_nonce_size - 1]
+	subkey := hchacha20(key, nonce[0..16])!
 	mut cnonce := nonce[16..24].clone()
 
 	cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
-	mut c := new_cipher(subkey, nonce)!
-	c.set_counter(ctr)
-	mut ciphertext := []u8{len: plaintext.len}
-	c.encrypt(mut ciphertext, plaintext)
-	//ciphertext := chacha20_encrypt(subkey, ctr, cnonce, plaintext)!
+
+	ciphertext := chacha20_encrypt_with_counter(subkey, cnonce, ctr, plaintext)!
 
 	return ciphertext
 }

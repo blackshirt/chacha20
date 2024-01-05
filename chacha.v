@@ -6,7 +6,6 @@
 module chacha20
 
 import math
-import crypto.rand
 import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
@@ -48,7 +47,7 @@ mut:
 	p3  u32 p7  u32 p11 u32 p15 u32
 }
 // vfmt on
-	
+
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
@@ -57,7 +56,7 @@ pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	// we dont need reset on new cipher instance
 	c.do_rekey(key, nonce)!
 
-	return c 
+	return c
 }
 
 // free the resources taken by the Cipher `c`. Dont use cipher after .free call
@@ -296,13 +295,13 @@ fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 		return error('chacha20: bad key size provided ')
 	}
 	// check for nonce's length is 12 or 24
-	if nonce.len != chacha20.nonce_size && nonce.len !=  chacha20.x_nonce_size {
+	if nonce.len != chacha20.nonce_size && nonce.len != chacha20.x_nonce_size {
 		return error('chacha20: bad nonce size provided')
 	}
 
 	if nonce.len == chacha20.x_nonce_size {
 		mut cnonce := nonce[16..].clone()
-		subkey := hchacha20(key, nonce[0..16])
+		subkey := hchacha20(key, nonce[0..16])!
 		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
 		mut c := new_cipher(subkey, nonce)!
 		c.chacha20_block()
@@ -317,11 +316,12 @@ fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 }
 
 // rekey resets internal Cipher's state and reinitializes state with the provided key and nonce
+@[unsafe]
 pub fn (mut c Cipher) rekey(key []u8, nonce []u8) ! {
-	c.reset()
-	return c.do_rekey(key, nonce)!
+	unsafe { c.reset() }
+	c.do_rekey(key, nonce)!
 }
-		
+
 // do_rekey reinitializes ChaCha20 instance with the provided key and nonce.
 fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
 	// check for correctness of key and nonce length
@@ -329,13 +329,13 @@ fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
 		return error('chacha20: bad key size provided ')
 	}
 	// check for nonce's length is 12 or 24
-	if nonce.len != chacha20.nonce_size && nonce.len !=  chacha20.x_nonce_size {
+	if nonce.len != chacha20.nonce_size && nonce.len != chacha20.x_nonce_size {
 		return error('chacha20: bad nonce size provided')
 	}
 	mut nonces := nonce.clone()
 	mut keys := key.clone()
 	if nonces.len == chacha20.x_nonce_size {
-		keys = hchacha20(keys, nonces[0..16])
+		keys = hchacha20(keys, nonces[0..16])!
 		mut cnonce := []u8{len: chacha20.nonce_size}
 		_ := copy(mut cnonce[4..12], nonces[16..24])
 		nonces = cnonce.clone()
@@ -356,7 +356,7 @@ fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
 	c.key[5] = binary.little_endian_u32(keys[20..24])
 	c.key[6] = binary.little_endian_u32(keys[24..28])
 	c.key[7] = binary.little_endian_u32(keys[28..32])
-	
+
 	// setup ChaCha20 cipher nonce
 	c.nonce[0] = binary.little_endian_u32(nonces[0..4])
 	c.nonce[1] = binary.little_endian_u32(nonces[4..8])
