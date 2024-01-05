@@ -140,10 +140,19 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		panic('chacha20: invalid buffer overlap')
 	}
 	mut ciphertext := []u8{}
-
-	// process for multiple blocks
-	for i := 0; i < src.len / chacha20.block_size; i++ {
-		// generates ciphers keystream and stored in c.block
+	// how many block the src bytes splitted to
+        nr_blocks := src.len / chacha20.block_size
+	
+	// ChaCha20's encryption process was relativrly simple operation
+	// for every block_sized's block from src bytes, build ChaCha20  keystream,
+	// xors each byte in the block with keystresm block and then append
+	// xor-ed bytes to the output buffer. If there are remaining (trailing) partial bytes,
+	// generates one more keystream block, xors keystream block with partial bytes
+	// and append to the result.
+	//
+	// Let's process for multiple blocks
+	for i := 0; i < nr_blocks ; i++ {
+		// generates ciphers keystream, its stored in c.block
 		c.generic_key_stream()
 		// get current's input block to be xor-ed
 		block := unsafe { src[i * chacha20.block_size..(i + 1) * chacha20.block_size] }
@@ -158,10 +167,9 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	}
 	// process for partial block
 	if src.len % chacha20.block_size != 0 {
-		j := src.len / chacha20.block_size
 		c.generic_key_stream()
 		// gets the remaining partial block
-		block := unsafe { src[j * chacha20.block_size..] }
+		block := unsafe { src[nr_blocks * chacha20.block_size..] }
 		// xor-ing block with keystream
 		mut out := []u8{len: block.len}
 		n := cipher.xor_bytes(mut out, block, c.block)
