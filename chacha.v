@@ -38,9 +38,9 @@ mut:
 	nonce    [3]u32  
 	counter  u32
 	overflow bool
-	// internal buffer for storing block stream results
+	// internal buffer for storing key stream results
 	block []u8 = []u8{len: chacha20.block_size}
-	// additional flags, follow the go version
+	// additional fields, follow the go version
 	precomp bool
 	p1  u32 p5  u32 p9  u32 p13 u32
 	p2  u32 p6  u32 p10 u32 p14 u32
