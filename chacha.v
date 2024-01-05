@@ -6,17 +6,15 @@
 module chacha20
 
 import math
-import math.bits
-import crypto.rand
 import crypto.cipher
 import crypto.internal.subtle
 import encoding.binary
 
-// key_size is key size of ChaCha20 key (256 bits size), in bytes
+// size of ChaCha20 key, ie 256 bits size, in bytes
 pub const key_size = 32
-// nonce_size is nonce_size for original ChaCha20 nonce (96 bits size), in bytes
+// size of ietf ChaCha20 nonce, ie 96 bits size, in bytes
 pub const nonce_size = 12
-// extended nonce size of chacha20, called xchacha20, 192 bits nonce size
+// size of extended ChaCha20 nonce, called XChaCha20, 192 bits
 pub const x_nonce_size = 24
 // internal block size ChaCha20 operates on, in bytes
 const block_size = 64
@@ -28,99 +26,81 @@ const cc0 = u32(0x61707865) // expa
 const cc1 = u32(0x3320646e) // nd 3
 const cc2 = u32(0x79622d32) // 2-by
 const cc3 = u32(0x6b206574) // te k
-// vfmt on
 
 // Cipher represents ChaCha20 stream cipher instances.
 struct Cipher {
-	// internal's of ChaCha20 state, ie, 16 of u32 words, 4 of ChaCha20 constants,
-	// 8 word (32 bytes) of keys, 3 word (24 bytes) of nonces and 1 word of counter
-	key   [8]u32 // key_size of bytes length
-	nonce [3]u32 // (x)_nonce_size of bytes length
 pub:
 	block_size int = chacha20.block_size
 mut:
+	// internal's of ChaCha20 states, ie, 16 of u32 words, 4 of ChaCha20 constants,
+	// 8 word (32 bytes) of keys, 3 word (24 bytes) of nonces and 1 word of counter
+	key      [8]u32  
+	nonce    [3]u32  
 	counter  u32
 	overflow bool
-	// internal block_size length buffer for storing block stream results
+	// internal buffer for storing key stream results
 	block []u8 = []u8{len: chacha20.block_size}
-	// we follow the go version
+	// additional fields, follow the go version
 	precomp bool
-	//
-	p1  u32
-	p5  u32
-	p9  u32
-	p13 u32
-	//
-	p2  u32
-	p6  u32
-	p10 u32
-	p14 u32
-	//
-	p3  u32
-	p7  u32
-	p11 u32
-	p15 u32
+	p1  u32 p5  u32 p9  u32 p13 u32
+	p2  u32 p6  u32 p10 u32 p14 u32
+	p3  u32 p7  u32 p11 u32 p15 u32
 }
-	
-// new_random_cipher creates new ChaCha20 cipher with random key and random nonce
-// Its accepts `xnonce` flag thats driving the supported size of the nonce, 12 or 24.
-pub fn new_random_cipher(xnonce bool) !&Cipher {
-	key := rand.read(key_size)!
-	size := if xnonce { x_nonce_size } else { nonce_size }
-	nonce := rand.read(size)!
+// vfmt on
 
-	c := new_cipher(key, nonce)!
-	return c
-}
-	
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
-// This is the only exported function to create initialized Cipher instances.
 pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
-	if key.len != chacha20.key_size {
-		return error('chacha20: bad key size provided ')
-	}
+	mut c := &Cipher{}
+	// we dont need reset on new cipher instance
+	c.do_rekey(key, nonce)!
 
-	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
-		return error('chacha20: Bad nonce size provided')
-	}
-	mut nonces := unsafe { nonce[..] }
-	mut keys := unsafe { key[..] }
-	if nonces.len == chacha20.x_nonce_size {
-		keys = hchacha20(keys, nonces[0..16])
-		mut cnonce := []u8{len: chacha20.nonce_size}
-		_ := copy(mut cnonce[4..12], nonces[16..24])
-		nonces = cnonce.clone()
-	} else if nonces.len != chacha20.nonce_size {
-		return error('chacha20: wrong nonce size')
-	}
-
-	// bounds check elimination hint
-	_ = keys[chacha20.key_size - 1]
-	_ = nonces[chacha20.nonce_size - 1]
-
-	// setup key
-	mut k := [8]u32{}
-	k[0] = binary.little_endian_u32(keys[0..4])
-	k[1] = binary.little_endian_u32(keys[4..8])
-	k[2] = binary.little_endian_u32(keys[8..12])
-	k[3] = binary.little_endian_u32(keys[12..16])
-	k[4] = binary.little_endian_u32(keys[16..20])
-	k[5] = binary.little_endian_u32(keys[20..24])
-	k[6] = binary.little_endian_u32(keys[24..28])
-	k[7] = binary.little_endian_u32(keys[28..32])
-	// setup nonce
-	mut n := [3]u32{}
-	n[0] = binary.little_endian_u32(nonces[0..4])
-	n[1] = binary.little_endian_u32(nonces[4..8])
-	n[2] = binary.little_endian_u32(nonces[8..12])
-
-	c := &Cipher{
-		key: k
-		nonce: n
-	}
 	return c
+}
+
+// free the resources taken by the Cipher `c`. Dont use cipher after .free call
+@[unsafe]
+pub fn (mut c Cipher) free() {
+	$if prealloc {
+		return
+	}
+	unsafe {
+		free(c)
+	}
+}
+
+// reset quickly sets all Cipher's fields to default value
+@[unsafe]
+pub fn (mut c Cipher) reset() {
+	for i, _ in c.key {
+		c.key[i] = u32(0)
+	}
+	for j, _ in c.nonce {
+		c.nonce[j] = u32(0)
+	}
+	unsafe {
+		c.block.reset()
+	}
+
+	c.counter = u32(0)
+	c.overflow = false
+	c.precomp = false
+	//
+	c.p1 = u32(0)
+	c.p5 = u32(0)
+	c.p9 = u32(0)
+	c.p13 = u32(0)
+	//
+	c.p2 = u32(0)
+	c.p6 = u32(0)
+	c.p10 = u32(0)
+	c.p14 = u32(0)
+	//
+	c.p3 = u32(0)
+	c.p7 = u32(0)
+	c.p11 = u32(0)
+	c.p15 = u32(0)
 }
 
 // set_counter sets Cipher's counter
@@ -134,54 +114,21 @@ pub fn (mut c Cipher) set_counter(ctr u32) {
 	c.counter = ctr
 }
 
-// quarter_round is the basic operation of the ChaCha algorithm. It operates
-// on four 32-bit unsigned integers, by performing AXR (add, xor, rotate)
-// operation on this quartet u32 numbers.
-fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
-	// The operation is as follows (in C-like notation):
-	// where `<<<=` denotes bits rotate left operation
-	// a += b; d ^= a; d <<<= 16;
-	// c += d; b ^= c; b <<<= 12;
-	// a += b; d ^= a; d <<<= 8;
-	// c += d; b ^= c; b <<<= 7;
-
-	mut ax := a
-	mut bx := b
-	mut cx := c
-	mut dx := d
-
-	ax += bx
-	dx ^= ax
-	dx = bits.rotate_left_32(dx, 16)
-
-	cx += dx
-	bx ^= cx
-	bx = bits.rotate_left_32(bx, 12)
-
-	ax += bx
-	dx ^= ax
-	dx = bits.rotate_left_32(dx, 8)
-
-	cx += dx
-	bx ^= cx
-	bx = bits.rotate_left_32(bx, 7)
-
-	return ax, bx, cx, dx
-}
-
-// encrypt fullfills `cipher.Block.encrypt` interface.
+// encrypt encrypts plaintext in src bytes and stores ciphertext result in dst.
+// Its fullfills `cipher.Block.encrypt` interface.
 pub fn (mut c Cipher) encrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
-// encrypt fullfills `cipher.Block.decrypt` interface.
+// decrypt does reverse of .encrypt() operation, decrypts ciphertext in src, and stores the result in dst.
+// decrypt fullfills `cipher.Block.decrypt` interface.
 pub fn (mut c Cipher) decrypt(mut dst []u8, src []u8) {
 	c.xor_key_stream(mut dst, src)
 }
 
-// xor_key_stream fullfills `cipher.Stream` interface. Internally, its encrypts plaintext message
-// in src and stores ciphertext result in dst. Its not fully compliant with the interface in the manner
-// its run in single run of encryption.
+// xor_key_stream xors each byte in the given slice in the src with a byte from the
+// cipher's key stream. It fullfills `cipher.Stream` interface. Its does encrypts plaintext message
+// in src and stores ciphertext result in dst in single shot of run of encryption.
 pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if src.len == 0 {
 		return
@@ -192,41 +139,42 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 	if subtle.inexact_overlap(dst, src) {
 		panic('chacha20: invalid buffer overlap')
 	}
-	mut encrypted_message := []u8{}
+	mut ciphertext := []u8{}
 
 	// process for multiple blocks
 	for i := 0; i < src.len / chacha20.block_size; i++ {
-		// current keystream was stored in c.block
+		// generates ciphers keystream and stored in c.block
 		c.generic_key_stream()
+		// get current's input block to be xor-ed
 		block := unsafe { src[i * chacha20.block_size..(i + 1) * chacha20.block_size] }
 
-		// encrypted_message += block ^ key_stream
+		// xor-ing current block of plaintext with keystream in c.block and stores result in out
 		mut out := []u8{len: block.len}
 		n := cipher.xor_bytes(mut out, block, c.block)
 		assert n == c.block.len
 
-		// encrypted_message = encrypted_message + dst
-		encrypted_message << out
+		// append current output to the ciphertext buffer
+		ciphertext << out
 	}
-	// partial block
+	// process for partial block
 	if src.len % chacha20.block_size != 0 {
 		j := src.len / chacha20.block_size
-		// block_generic(key, counter + u32(j), nonce) or {
 		c.generic_key_stream()
+		// gets the remaining partial block
 		block := unsafe { src[j * chacha20.block_size..] }
-
-		// encrypted_message += (block^key_stream)[0..len(plaintext)%block_size]
+		// xor-ing block with keystream
 		mut out := []u8{len: block.len}
 		n := cipher.xor_bytes(mut out, block, c.block)
 		assert n == block.len
 
+		// we make sure, takes only required remaining bytes
 		out = unsafe { out[0..src.len % chacha20.block_size] }
 
-		// encrypted_message = encrypted_message[0..plaintext.len % block_size]
-		encrypted_message << out
+		// append last output to the ciphertext buffer
+		ciphertext << out
 	}
 	// copy ciphertext message results to the dst buffer
-	n := copy(mut dst, encrypted_message)
+	n := copy(mut dst, ciphertext)
 	assert n == src.len
 }
 
@@ -300,7 +248,7 @@ fn (mut c Cipher) chacha20_block() {
 	x9 += c9
 	x10 += c10
 	x11 += c11
-	// x12 is c.counter
+	// x12 is Cipher.counter
 	x12 += c.counter
 	x13 += c13
 	x14 += c14
@@ -324,7 +272,7 @@ fn (mut c Cipher) chacha20_block() {
 	binary.little_endian_put_u32(mut c.block[60..64], x15)
 }
 
-// generic_key_stream creates unoptimized generic ChaCha20 keystream block and stores the result in Cipher.block
+// generic_key_stream creates generic ChaCha20 keystream block and stores the result in Cipher.block
 fn (mut c Cipher) generic_key_stream() {
 	// creates ChaCha20 block stream
 	c.chacha20_block()
@@ -342,16 +290,18 @@ fn (mut c Cipher) generic_key_stream() {
 // otk_key_gen generates one time key using `chacha20` block function if provided
 // nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.
 // This function is intended to generate key for poly1305 mac.
-pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
-	_ = key[chacha20.key_size - 1]
-	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
-		return error('Bad nonce size')
+fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
+	if key.len != chacha20.key_size {
+		return error('chacha20: bad key size provided ')
+	}
+	// check for nonce's length is 12 or 24
+	if nonce.len != chacha20.nonce_size && nonce.len != chacha20.x_nonce_size {
+		return error('chacha20: bad nonce size provided')
 	}
 
-	// ensure nonce size is valid
 	if nonce.len == chacha20.x_nonce_size {
 		mut cnonce := nonce[16..].clone()
-		subkey := hchacha20(key, nonce[0..16])
+		subkey := hchacha20(key, nonce[0..16])!
 		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
 		mut c := new_cipher(subkey, nonce)!
 		c.chacha20_block()
@@ -363,4 +313,52 @@ pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 		return c.block[0..32]
 	}
 	return error('wrong nonce size')
+}
+
+// rekey resets internal Cipher's state and reinitializes state with the provided key and nonce
+@[unsafe]
+pub fn (mut c Cipher) rekey(key []u8, nonce []u8) ! {
+	unsafe { c.reset() }
+	c.do_rekey(key, nonce)!
+}
+
+// do_rekey reinitializes ChaCha20 instance with the provided key and nonce.
+fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
+	// check for correctness of key and nonce length
+	if key.len != chacha20.key_size {
+		return error('chacha20: bad key size provided ')
+	}
+	// check for nonce's length is 12 or 24
+	if nonce.len != chacha20.nonce_size && nonce.len != chacha20.x_nonce_size {
+		return error('chacha20: bad nonce size provided')
+	}
+	mut nonces := nonce.clone()
+	mut keys := key.clone()
+	if nonces.len == chacha20.x_nonce_size {
+		keys = hchacha20(keys, nonces[0..16])!
+		mut cnonce := []u8{len: chacha20.nonce_size}
+		_ := copy(mut cnonce[4..12], nonces[16..24])
+		nonces = cnonce.clone()
+	} else if nonces.len != chacha20.nonce_size {
+		return error('chacha20: wrong nonce size')
+	}
+
+	// bounds check elimination hint
+	_ = keys[chacha20.key_size - 1]
+	_ = nonces[chacha20.nonce_size - 1]
+
+	// setup ChaCha20 cipher key
+	c.key[0] = binary.little_endian_u32(keys[0..4])
+	c.key[1] = binary.little_endian_u32(keys[4..8])
+	c.key[2] = binary.little_endian_u32(keys[8..12])
+	c.key[3] = binary.little_endian_u32(keys[12..16])
+	c.key[4] = binary.little_endian_u32(keys[16..20])
+	c.key[5] = binary.little_endian_u32(keys[20..24])
+	c.key[6] = binary.little_endian_u32(keys[24..28])
+	c.key[7] = binary.little_endian_u32(keys[28..32])
+
+	// setup ChaCha20 cipher nonce
+	c.nonce[0] = binary.little_endian_u32(nonces[0..4])
+	c.nonce[1] = binary.little_endian_u32(nonces[4..8])
+	c.nonce[2] = binary.little_endian_u32(nonces[8..12])
 }
