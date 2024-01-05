@@ -40,16 +40,17 @@ fn quarter_round(a u32, b u32, c u32, d u32) (u32, u32, u32, u32) {
 	return ax, bx, cx, dx
 }
 
+/*
 // encrypt was a thin wrapper around two supported nonce size, ChaCha20 with 96 bits
 // and XChaCha20 with 192 bits nonce.
-fn encrypt(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
+fn encrypt_generic(key []u8, ctr u32, nonce []u8, plaintext []u8) ![]u8 {
 	_ = key[..key_size]
 	if nonce.len == x_nonce_size {
-		ciphertext := encrypt_extended(key, ctr, nonce, plaintext)!
+		ciphertext := xchacha20_encrypt(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
 	if nonce.len == nonce_size {
-		ciphertext := encrypt_generic_ref(key, ctr, nonce, plaintext)!
+		ciphertext := chacha20_encrypt(key, ctr, nonce, plaintext)!
 		return ciphertext
 	}
 	return error('Wrong nonce size : ${nonce.len}')
@@ -133,7 +134,7 @@ fn block_generic(key []u8, counter u32, nonce []u8) ![]u8 {
 }
 
 // encrypt_generic generates encrypted message from plaintext
-fn encrypt_generic_ref(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
+fn chacha20_encrypt(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 {
 	// bound early check
 	_, _ = key[key_size - 1], nonce[nonce_size - 1]
 	mut encrypted_message := []u8{}
@@ -169,8 +170,8 @@ fn encrypt_generic_ref(key []u8, counter u32, nonce []u8, plaintext []u8) ![]u8 
 	return encrypted_message
 }
 
-// decrypt_generic decrypts the ciphertext, opposites of encryption process
-fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
+// chacha20_decrypt decrypts the ciphertext, opposites of encryption process
+fn chacha20_decrypt(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 	// bound early check
 	_, _ = key[key_size - 1], nonce[nonce_size - 1]
 	mut decrypted_message := []u8{}
@@ -201,3 +202,4 @@ fn decrypt_generic(key []u8, counter u32, nonce []u8, ciphertext []u8) ![]u8 {
 	}
 	return decrypted_message
 }
+*/

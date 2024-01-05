@@ -49,18 +49,6 @@ mut:
 }
 // vfmt on
 	
-// new_random_cipher creates new ChaCha20 cipher instance with random key and random nonce 
-// obtained from `crypto.rand`.
-// Its accepts `xnonce` flag thats driving the supported size of the nonce, 12 or 24.
-pub fn new_random_cipher(xnonce bool) !&Cipher {
-	key := rand.read(chacha20.key_size)!
-	size := if xnonce { chacha20.x_nonce_size } else { chacha20.nonce_size }
-	nonce := rand.read(size)!
-
-	c := new_cipher(key, nonce)!
-	return c
-}
-
 // new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key
 // and a 12 or 24 bytes nonce. If a nonce of 24 bytes is provided, the XChaCha20 construction
 // will be used. It returns an error if key or nonce have any other length.
@@ -261,7 +249,7 @@ fn (mut c Cipher) chacha20_block() {
 	x9 += c9
 	x10 += c10
 	x11 += c11
-	// x12 is c.counter
+	// x12 is Cipher.counter
 	x12 += c.counter
 	x13 += c13
 	x14 += c14
@@ -303,13 +291,15 @@ fn (mut c Cipher) generic_key_stream() {
 // otk_key_gen generates one time key using `chacha20` block function if provided
 // nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.
 // This function is intended to generate key for poly1305 mac.
-pub fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
-	_ = key[chacha20.key_size - 1]
-	if nonce.len !in [chacha20.nonce_size, chacha20.x_nonce_size] {
-		return error('Bad nonce size')
+fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
+	if key.len != chacha20.key_size {
+		return error('chacha20: bad key size provided ')
+	}
+	// check for nonce's length is 12 or 24
+	if nonce.len != chacha20.nonce_size && nonce.len !=  chacha20.x_nonce_size {
+		return error('chacha20: bad nonce size provided')
 	}
 
-	// ensure nonce size is valid
 	if nonce.len == chacha20.x_nonce_size {
 		mut cnonce := nonce[16..].clone()
 		subkey := hchacha20(key, nonce[0..16])
@@ -342,8 +332,8 @@ fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
 	if nonce.len != chacha20.nonce_size && nonce.len !=  chacha20.x_nonce_size {
 		return error('chacha20: bad nonce size provided')
 	}
-	mut nonces := unsafe { nonce[..] }
-	mut keys := unsafe { key[..] }
+	mut nonces := nonce.clone()
+	mut keys := key.clone()
 	if nonces.len == chacha20.x_nonce_size {
 		keys = hchacha20(keys, nonces[0..16])
 		mut cnonce := []u8{len: chacha20.nonce_size}
