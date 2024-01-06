@@ -62,7 +62,7 @@ fn chacha20_encrypt_with_counter(key []u8, nonce []u8, ctr u32, plaintext []u8) 
 	c.set_counter(ctr)
 	mut out := []u8{len: plaintext.len}
 
-	c.encrypt(mut out, plaintext)
+	c.xor_key_stream(mut out, plaintext)
 
 	return out
 }
