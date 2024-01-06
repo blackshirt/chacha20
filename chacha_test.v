@@ -9,6 +9,67 @@ struct BlockCase {
 	output  string
 }
 
+fn test_chacha20_no_overlap_xor_key_stream() ! {
+	for i, t in xorkeystream_testcases {
+		key := hex.decode(t.key)!
+		nonce := hex.decode(t.nonce)!
+		mut cs := new_cipher(key, nonce)!
+
+		input := hex.decode(t.input)!
+		mut output := []u8{len: input.len}
+		cs.xor_key_stream(mut output, input)
+		got := hex.encode(output)
+
+		assert got == t.output
+
+		// decryption back
+		// for decryption, we can not use cs.xor_key_stream directly on output bytes
+		// internally, Cipher stream has updates the counter, thats differ from encryption phase
+		// you can use Cipher instance by set Cipher counter
+		plaintext := decrypt(key, nonce, output)!
+		assert plaintext == input
+	}
+}
+
+fn test_chacha20_block_function() ! {
+	for val in chacha20.blocks_testcases {
+		key_bytes := hex.decode(val.key)!
+		nonce_bytes := hex.decode(val.nonce)!
+		mut cs := new_cipher(key_bytes, nonce_bytes)!
+		cs.set_counter(val.counter)
+		cs.chacha20_block()
+		exp_bytes := hex.decode(val.output)!
+
+		assert cs.block == exp_bytes
+	}
+}
+
+fn test_chacha20_simple_block_function() ! {
+	key := '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
+	key_bytes := hex.decode(key)!
+
+	nonce := '000000090000004a00000000'
+	nonce_bytes := hex.decode(nonce)!
+
+	mut block := []u8{len: block_size}
+	mut cs := new_cipher(key_bytes, nonce_bytes)!
+	cs.set_counter(u32(1))
+	cs.chacha20_block()
+
+	expected_raw_bytes := '10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e'
+	exp_bytes := hex.decode(expected_raw_bytes)!
+
+	assert cs.block == exp_bytes
+}
+
+fn test_chacha20_quarter_round() {
+	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)
+	assert a == 0xea2a92f4
+	assert b == 0xcb1cf8ce
+	assert c == 0x4581472e
+	assert d == 0x5881c4bb
+}
+
 // test poly1305 key generator as specified in https://datatracker.ietf.org/doc/html/rfc8439#section-2.6.2
 fn test_chacha20_onetime_key_gen() ! {
 	for i, v in chacha20.otk_cases {
@@ -54,65 +115,6 @@ const otk_cases = [
 		otk: '965e3bc6f9ec7ed9560808f4d229f94b137ff275ca9b3fcbdd59deaad23310ae'
 	},
 ]
-
-fn test_chacha20_no_overlap_xor_key_stream() ! {
-	for i, t in xorkeystream_testcases {
-		key := hex.decode(t.key)!
-		nonce := hex.decode(t.nonce)!
-		mut cs := new_cipher(key, nonce)!
-
-		input := hex.decode(t.input)!
-		mut output := []u8{len: input.len}
-		cs.xor_key_stream(mut output, input)
-		got := hex.encode(output)
-
-		assert got == t.output
-	}
-}
-
-fn test_chacha20_block_function() ! {
-	for val in chacha20.blocks_testcases {
-		key_bytes := hex.decode(val.key)!
-		nonce_bytes := hex.decode(val.nonce)!
-		mut cs := new_cipher(key_bytes, nonce_bytes)!
-		cs.set_counter(val.counter)
-		cs.chacha20_block()
-		exp_bytes := hex.decode(val.output)!
-
-		// assert key_bytes.len == 32
-		// assert nonce_bytes.len == 12
-		assert cs.block.len == 64
-		assert cs.block == exp_bytes
-	}
-}
-
-fn test_chacha20_simple_block_function() ! {
-	key := '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'
-	key_bytes := hex.decode(key)!
-	// assert key_bytes.len == 32
-
-	nonce := '000000090000004a00000000'
-	nonce_bytes := hex.decode(nonce)!
-
-	mut block := []u8{len: block_size}
-	mut cs := new_cipher(key_bytes, nonce_bytes)!
-	cs.set_counter(u32(1))
-	cs.chacha20_block()
-
-	expected_raw_bytes := '10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e'
-	exp_bytes := hex.decode(expected_raw_bytes)!
-
-	assert exp_bytes.len == 64
-	assert cs.block == exp_bytes
-}
-
-fn test_chacha20_quarter_round() {
-	a, b, c, d := quarter_round(0x11111111, 0x01020304, 0x9b8d6f43, 0x01234567)
-	assert a == 0xea2a92f4
-	assert b == 0xcb1cf8ce
-	assert c == 0x4581472e
-	assert d == 0x5881c4bb
-}
 
 const blocks_testcases = [
 	// section 2.3.4 https://datatracker.ietf.org/doc/html/rfc8439#section-2.3.2
@@ -178,7 +180,7 @@ fn test_chacha20_cipher_encrypt() ! {
 		cs.set_counter(c.counter)
 
 		mut output := []u8{len: plaintext_bytes.len}
-		cs.encrypt(mut output, plaintext_bytes)
+		cs.xor_key_stream(mut output, plaintext_bytes)
 
 		expected := hex.decode(c.output)!
 		assert output == expected
@@ -195,7 +197,7 @@ fn test_chacha20_cipher_decrypt() ! {
 		cs.set_counter(c.counter)
 
 		mut output := []u8{len: ciphertext.len}
-		cs.decrypt(mut output, ciphertext)
+		cs.xor_key_stream(mut output, ciphertext)
 
 		expected_decrypted_message := hex.decode(c.plaintext)!
 		assert output == expected_decrypted_message
