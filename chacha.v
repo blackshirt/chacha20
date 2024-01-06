@@ -46,8 +46,8 @@ mut:
 }
 // vfmt on
 
-// new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key, a 12 or 24 bytes nonce. 
-// If 24 bytes of nonce was provided, the XChaCha20 construction will be used. 
+// new_cipher creates a new ChaCha20 stream cipher with the given 32 bytes key, a 12 or 24 bytes nonce.
+// If 24 bytes of nonce was provided, the XChaCha20 construction will be used.
 // It returns new ChaCha20 cipher instance or an error if key or nonce have any other length.
 pub fn new_cipher(key []u8, nonce []u8) !&Cipher {
 	mut c := &Cipher{}
@@ -65,7 +65,7 @@ pub fn encrypt(key []u8, nonce []u8, plaintext []u8) ![]u8 {
 	return encrypt_with_counter(key, nonce, u32(0), plaintext)
 }
 
-// decrypt does reverse of encrypt operation by decrypting ciphertext with ChaCha20 cipher 
+// decrypt does reverse of encrypt operation by decrypting ciphertext with ChaCha20 cipher
 // instance with provided key and nonce.
 pub fn decrypt(key []u8, nonce []u8, ciphertext []u8) ![]u8 {
 	return encrypt_with_counter(key, nonce, u32(0), ciphertext)
@@ -85,18 +85,18 @@ pub fn (mut c Cipher) xor_key_stream(mut dst []u8, src []u8) {
 		panic('chacha20: invalid buffer overlap')
 	}
 	mut ciphertext := []u8{}
-		
+
 	// ChaCha20's encryption mechanism was relatively simple operation.
 	// for every block_sized's block from src bytes, build ChaCha20  keystream block,
-	// then xors each byte in the block with keystresm block and then appends xor-ed bytes 
+	// then xors each byte in the block with keystresm block and then appends xor-ed bytes
 	// to the output buffer. If there are remaining (trailing) partial bytes,
 	// generates one more keystream block, xors keystream block with partial bytes
 	// and append to the result.
 	//
 	// Let's process for multiple blocks
 	// how many block the src bytes splitted to
-    nr_blocks := src.len / chacha20.block_size
-	for i := 0; i < nr_blocks ; i++ {
+	nr_blocks := src.len / chacha20.block_size
+	for i := 0; i < nr_blocks; i++ {
 		// generates ciphers keystream block, its stored in c.block
 		c.generic_key_stream()
 		// get current's src block to be xor-ed
@@ -206,7 +206,7 @@ fn (mut c Cipher) do_rekey(key []u8, nonce []u8) ! {
 	mut nonces := nonce.clone()
 	mut keys := key.clone()
 
-	// if nonce's length is 24 bytes, we derive a new key and nonce with hchacha20 function 
+	// if nonce's length is 24 bytes, we derive a new key and nonce with hchacha20 function
 	// and supplied to setup process.
 	if nonces.len == chacha20.x_nonce_size {
 		keys = hchacha20(keys, nonces[0..16])!
@@ -345,5 +345,3 @@ fn (mut c Cipher) generic_key_stream() {
 	}
 	c.counter += 1
 }
-
-

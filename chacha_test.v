@@ -178,7 +178,7 @@ fn test_chacha20_cipher_encrypt() ! {
 		cs.set_counter(c.counter)
 
 		mut output := []u8{len: plaintext_bytes.len}
-		cs.encrypt(mut output, plaintext_bytes)
+		cs.xor_key_stream(mut output, plaintext_bytes)
 
 		expected := hex.decode(c.output)!
 		assert output == expected
@@ -195,7 +195,7 @@ fn test_chacha20_cipher_decrypt() ! {
 		cs.set_counter(c.counter)
 
 		mut output := []u8{len: ciphertext.len}
-		cs.decrypt(mut output, ciphertext)
+		cs.xor_key_stream(mut output, ciphertext)
 
 		expected_decrypted_message := hex.decode(c.plaintext)!
 		assert output == expected_decrypted_message

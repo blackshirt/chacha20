@@ -71,15 +71,15 @@ fn chacha20_encrypt_with_counter(key []u8, nonce []u8, ctr u32, plaintext []u8) 
 // nonce was 12 bytes and using `xchacha20`, when its nonce was 24 bytes.
 // This function is intended to generate key for poly1305 mac.
 fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
-	if key.len != chacha20.key_size {
+	if key.len != key_size {
 		return error('chacha20: bad key size provided ')
 	}
 	// check for nonce's length is 12 or 24
-	if nonce.len != chacha20.nonce_size && nonce.len != chacha20.x_nonce_size {
+	if nonce.len != nonce_size && nonce.len != x_nonce_size {
 		return error('chacha20: bad nonce size provided')
 	}
 
-	if nonce.len == chacha20.x_nonce_size {
+	if nonce.len == x_nonce_size {
 		mut cnonce := nonce[16..].clone()
 		subkey := hchacha20(key, nonce[0..16])!
 		cnonce.prepend([u8(0x00), 0x00, 0x00, 0x00])
@@ -87,8 +87,8 @@ fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 		c.chacha20_block()
 		return c.block[0..32]
 	}
-	
-	if nonce.len == chacha20.nonce_size {
+
+	if nonce.len == nonce_size {
 		mut c := new_cipher(key, nonce)!
 		c.chacha20_block()
 		return c.block[0..32]
