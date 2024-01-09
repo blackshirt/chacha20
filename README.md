@@ -1,5 +1,9 @@
 # module chacha20
 
+Note:
+-----
+This repo has been archived, Its has been merged to experimental module inside `vlib/x/crypto/chacha,20`. Development will be carried out there.
+
 chacha20
 -------
 
