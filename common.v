@@ -1,5 +1,6 @@
 module chacha20
 
+/*
 import math.bits
 
 // quarter_round is the basic operation of the ChaCha algorithm. It operates
@@ -95,3 +96,4 @@ fn otk_key_gen(key []u8, nonce []u8) ![]u8 {
 	}
 	return error('wrong nonce size')
 }
+*/
